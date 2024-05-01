@@ -1,0 +1,6 @@
+_target_: ${csi}.data.datamodule.ph14.Ph14DataModule
+data_dir: ${ph14.lmdb_root}
+batch_size: 2
+train_transform: ${transforms.train}
+val_transform: ${transforms.test}
+test_transform: ${transforms.test}

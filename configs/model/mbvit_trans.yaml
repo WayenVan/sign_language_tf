@@ -1,0 +1,20 @@
+_target_: ${csi}.modules.slr_base.base_stream.BaseStream
+encoder: 
+  _target_: ${csi}.modules.slr_base.mobilevit_encoder.MobiViTEncoder
+  cfg: ${mbvit_cfg}
+  ckpt: ${mbvit_ckpt}
+neck:
+  _target_: ${csi}.modules.tconv.TemporalConv1D
+  input_size: 640
+  out_size: 1024
+  bottleneck_size:  512
+  conv_type: ['K5', 'P2', 'K5', 'P2']
+  pooling: 'max'
+decoder:
+  _target_: ${csi}.modules.slr_base.decoders.TransformerDecoder
+  n_class: 1296
+  d_model: 1024
+  n_heads: 8
+  n_layers: 6
+  d_feedforward: 2048
+  dropout: 0.5

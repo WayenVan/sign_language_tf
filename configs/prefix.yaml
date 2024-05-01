@@ -1,0 +1,11 @@
+csi: csi_sign_language
+transform: torchvision.transforms
+
+T: torchvision.transforms
+CT: csi_sign_language.data.transforms
+cdataset: ${csi}.data.dataset
+
+DataLoader: torch.utils.data.DataLoader
+
+models: ${csi}.models
+modules: ${csi}.modules

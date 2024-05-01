@@ -1,0 +1,25 @@
+_target_: ${csi}.modules.slr_base.base_stream.BaseStream
+encoder: 
+  _target_: ${csi}.modules.slr_base.vitpose_encoder.VitPoseEncoder
+  img_size: 192
+  color_range: [0, 1]
+  cfg_path: ${vitpose_cfg}
+  checkpoint: ${vitpose_ckpt}
+  drop_path_rate: 0.5
+  freeze_vitpose: False
+neck:
+  _target_: ${csi}.modules.tconv.TemporalConv1D
+  input_size: 384
+  out_size: 1024
+  bottleneck_size:  512
+  conv_type: ['K5', 'P2', 'K5', 'P2']
+  pooling: 'max'
+  dropout: 0.0
+decoder:
+  _target_: ${csi}.modules.slr_base.decoders.TransformerDecoder
+  n_class: 1296
+  d_model: 1024
+  n_heads: 8
+  n_layers: 6
+  d_feedforward: 2048
+  dropout: 0.5

@@ -1,0 +1,15 @@
+ph14:
+  lmdb_root: preprocessed/ph14_lmdb
+  root: dataset/phoenix2014-release
+    
+swin_cfg: resources/swin/tiny_224.py
+swin_ckpt: resources/swin/swin_tiny_224_b16x64_300e_imagenet_20210616_090925-66df6be6.pth
+
+resnet_cfg: resources/resnet/resnet18.py
+resnet_ckpt: resources/resnet/resnet18_8xb32_in1k_20210831-fbbb1da6.pth
+  
+vitpose_cfg: resources/vitpose/td-hm_ViTPose-small_8xb64-210e_coco-256x192.py
+vitpose_ckpt: resources/vitpose/td-hm_ViTPose-small_8xb64-210e_coco-256x192-62d7a712_20230314.pth
+  
+mbvit_cfg: resources/mbvit/mbvit.py
+mbvit_ckpt: resources/mbvit/mobilevit-small_3rdparty_in1k_20221018-cb4f741c.pth
