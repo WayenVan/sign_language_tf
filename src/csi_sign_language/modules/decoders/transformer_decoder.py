@@ -1,9 +1,9 @@
 
 import torch.nn as nn
-from ...modules.tconv import *
+from ..components.tconv import *
 
 from collections import namedtuple
-from ...modules.transformer import TransformerEncoder
+from ..components.transformer import TransformerEncoder
 
 class TransformerDecoder(nn.Module):
     
@@ -24,7 +24,6 @@ class TransformerDecoder(nn.Module):
             t_length = t_length,
             seq_out = seq_out
         )
-        
 
     def train(self, mode: bool = True):
         super().train(mode)

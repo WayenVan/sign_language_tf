@@ -1,7 +1,4 @@
-import pdb
-import copy
 import torch
-import collections
 import torch.nn as nn
 import torch.nn.functional as F
 from .patch_merg import PatchMerge1D
@@ -10,7 +7,7 @@ from .patch_merg import PatchMerge1D
 
 class TemporalConv1D(nn.Module):
 
-    def __init__(self, input_size, out_size, bottleneck_size, conv_type=2, pooling='max', dropout=0.5):
+    def __init__(self, input_size, out_size, bottleneck_size, conv_type=['K5', 'P2', 'K5', 'P2'], pooling='max', dropout=0.5):
         super(TemporalConv1D, self).__init__()
         self.input_size = input_size
         self.hidden_size = bottleneck_size

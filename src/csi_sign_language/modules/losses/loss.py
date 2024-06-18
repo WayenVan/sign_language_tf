@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 from mmengine.config import Config
+from mmengine.registry.utils import init_default_scope
 from mmpose.apis import init_model
 from csi_sign_language.utils.data import mapping_0_1
 from einops import rearrange
@@ -67,11 +68,14 @@ class HeatMapLoss(nn.Module):
         self.cfg = cfg
         self.color_range = color_range
 
-        self.vitpose = init_model(cfg, checkpoint, device='cpu')
-        self.vitpose = self.vitpose.half()
-        for p in self.vitpose.parameters():
+        vitpose = init_model(cfg, checkpoint, device='cpu')
+        vitpose = vitpose.half()
+        for p in vitpose.parameters():
             p.requires_grad = False
-        self.vitpose.eval()
+        vitpose.eval()
+        
+        #ignore the vitpsoe by hid it behind a list
+        self.vitpose = [vitpose]
 
         self.register_buffer('std', torch.tensor(cfg.model.data_preprocessor.std))
         self.register_buffer('mean', torch.tensor(cfg.model.data_preprocessor.mean))
@@ -93,7 +97,7 @@ class HeatMapLoss(nn.Module):
             x = x.half()
 
         x = self._data_preprocess(x)
-        heatmap = self.vitpose(x, None)
+        heatmap = self.vitpose[0](x, None)
         return heatmap.detach().clone()
 
     @torch.inference_mode()

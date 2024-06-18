@@ -1,12 +1,6 @@
-import torch
-from typing import List
 import torch.nn as nn
 import torch.nn.functional as F
-from ..x3d import X3d
-from ..externals.flownet2.models import FlowNet2SDConvDown, FlowNet2SD
-from ..tconv import TemporalConv1D
 from einops import rearrange, repeat
-from einops.layers.torch import Rearrange
 from collections import namedtuple
 
 from mmpretrain.models.backbones.resnet import ResNet

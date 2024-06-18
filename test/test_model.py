@@ -4,23 +4,36 @@ import sys
 sys.path.append('src')
 from hydra.utils import instantiate
 from omegaconf import OmegaConf
+from csi_sign_language.models.slr_model import SLRModel
+from lightning import Trainer
+from mmpretrain.models.backbones.levit import LeViT
+def test_model():
+    hydra.initialize_config_dir('/home/jingyan/Documents/sign_language_transformer/configs')
+    cfg = hydra.compose('run/train/vit_adapter_heatmap')
+    index = 0
 
-def test_hrnet_rnn():
-    cfg = "configs/train/hrnet_rnn.yaml"
-    cfg = OmegaConf.load(cfg)
-    loader = instantiate(cfg.data.train_loader)
-    model = instantiate(cfg.model, vocab=loader.dataset.get_vocab()).to(cfg.device)
-    data = next(iter(loader))
-    video = data['video'].to(cfg.device)
-    lgt = data['video_length'].to(cfg.device)
+    datamodule = instantiate(cfg.datamodule)
+    vocab = datamodule.get_vocab()
 
-    output = model(video, lgt)
-
+    lightning_module = SLRModel(cfg, vocab)
+    lightning_module.set_post_process(datamodule.get_post_process())
+    
+    t = Trainer(
+        accelerator='gpu',
+        strategy='ddp',
+        max_steps=3,
+        devices=1,
+        logger=False,
+        enable_checkpointing=False,
+        precision=16,
+    )
+    
+    t.fit(lightning_module, datamodule)
     return
 
 
 
 if __name__ == "__main__":
-    test_hrnet_rnn()
+    test_model()
     
     

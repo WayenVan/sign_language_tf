@@ -1,5 +1,5 @@
 ph14:
-  lmdb_root: preprocessed/ph14_lmdb
+  lmdb_root: dataset/preprocessed/ph14_lmdb
   root: dataset/phoenix2014-release
     
 swin_cfg: resources/swin/tiny_224.py
@@ -13,3 +13,6 @@ vitpose_ckpt: resources/vitpose/td-hm_ViTPose-small_8xb64-210e_coco-256x192-62d7
   
 mbvit_cfg: resources/mbvit/mbvit.py
 mbvit_ckpt: resources/mbvit/mobilevit-small_3rdparty_in1k_20221018-cb4f741c.pth
+
+levit_cfg: resources/levit/levit-256-p16_.py
+levit_ckpt: resources/levit/levit-256_3rdparty_in1k_20230117-5ae2ce7d.pth

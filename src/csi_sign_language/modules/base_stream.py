@@ -1,19 +1,12 @@
-import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-import copy
-from ...modules.bilstm import BiLSTMLayer
-from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
 from collections import namedtuple
 
-from csi_sign_language.utils.misc import add_attributes
 
 
 class BaseStream(nn.Module):
 
-    ret = namedtuple('BaseStreamOut', ['out', 't_length', 'encoder_out'])
+    ret = namedtuple('BaseStreamOut', ['out', 't_length', 'encoder_out', 'neck_out'])
 
     def __init__(self, encoder, decoder, neck=None, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -31,8 +24,11 @@ class BaseStream(nn.Module):
         x = encoder_out.out
         t_length = encoder_out.t_length
         
+        neckout = None
         if self.neck is not None:
-            x, t_length = self.neck(x, t_length)
+            neckout = self.neck(x, t_length)
+            x = neckout.feats
+            t_length = neckout.t_length
 
         x = self.rearrange(x)
         decoder_out = self.decoder(x, t_length)
@@ -40,5 +36,6 @@ class BaseStream(nn.Module):
         return self.ret(
             out = decoder_out.out,
             t_length = decoder_out.t_length,
-            encoder_out = encoder_out
+            encoder_out = encoder_out,
+            neck_out = neckout
         )

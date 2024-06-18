@@ -5,8 +5,6 @@ import sys
 from typing import List, Any
 from einops import rearrange
 from ..utils.decode import CTCDecoder
-from ..modules.base_stream import BaseStream
-from collections import namedtuple
 from hydra.utils import instantiate
 
 import lightning as L
@@ -14,16 +12,11 @@ from omegaconf.dictconfig import DictConfig
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LRScheduler
 from csi_sign_language.data_utils.ph14.post_process import post_process
-from csi_sign_language.modules.loss import VACLoss as _VACLoss
-from csi_sign_language.modules.loss import HeatMapLoss
+from csi_sign_language.modules.losses.loss import VACLoss as _VACLoss
 from csi_sign_language.data_utils.ph14.wer_evaluation_python import wer_calculation
 
-from torchmetrics.text import WordErrorRate
 from typing import List
 from ..data_utils.interface_post_process import IPostProcess
-import re
-
-
 
 class SLRModel(L.LightningModule):
 
@@ -40,7 +33,8 @@ class SLRModel(L.LightningModule):
         self.cfg = cfg
         self.data_excluded = getattr(cfg, 'data_excluded', [])
         self.backbone: nn.Module = instantiate(cfg.model)
-        self.loss: nn.Module = instantiate(cfg.loss)
+
+        self.loss = instantiate(cfg.loss)
 
         self.vocab = vocab
         self.decoder = CTCDecoder(vocab, blank_id=0, search_mode=ctc_search_type, log_probs_input=True)
@@ -82,13 +76,6 @@ class SLRModel(L.LightningModule):
                     print(grad)
                     print('graident is inf', file=sys.stderr)
 
-    
-    def on_save_checkpoint(self, checkpoint: torch.Dict[str, Any]) -> None:
-        #remove any parameters in loss function to reduce thesize
-        state_dict = checkpoint['state_dict']
-        state_dict = {k: v for k, v in state_dict.items() if not re.match(r'^loss', k)}
-        checkpoint['state_dict'] = state_dict
-        
     def set_post_process(self, fn):
         self.post_process: IPostProcess = fn
 
@@ -154,7 +141,14 @@ class SLRModel(L.LightningModule):
         self.log('val_wer', wer_calculation(gt, hyp), on_epoch=True, on_step=False, sync_dist=True)
         self.val_ids_epoch += id
     
-
+    
+    
+    # def on_save_checkpoint(self, checkpoint: torch.Dict[str, Any]) -> None:
+    #     params: dict = checkpoint['state_dict']
+    #     for key in params.keys():
+    #         if re.match('loss' )
+            
+    
     def configure_optimizers(self):
         opt: Optimizer = instantiate(self.cfg.optimizer, filter(lambda p: p.requires_grad, self.backbone.parameters()))
         scheduler = instantiate(self.cfg.lr_scheduler, opt)
@@ -170,36 +164,12 @@ class VACLoss(nn.Module):
         self.loss = _VACLoss(weights, temp)
 
     def forward(self, outputs, input, input_length, target, target_length): 
-        conv_out = outputs.encoder_out.out
-        conv_length = outputs.encoder_out.t_length
+        conv_out = outputs.neck_out.out
+        conv_length = outputs.neck_out.t_length
+
         seq_out = outputs.out
         t_length = outputs.t_length
+
         return self.loss(conv_out, conv_length, seq_out, t_length, target, target_length)
 
-class MultiLoss(nn.Module):
-    
-    def __init__(
-        self,
-        weights,
-        color_range,
-        cfg,
-        ckpt) -> None:
-        super().__init__()
-        self.weights = weights
-        self.pose_loss = HeatMapLoss(color_range, cfg, ckpt)
-        self.ctc_loss = nn.CTCLoss(blank=0, reduction='none')
-    
-    def forward(self, outputs, input, input_length, target, target_length): 
-        #n c t h w
-        heatmap_out = outputs.backbone_out.encoder_out.heatmap
-        out = F.log_softmax(outputs.backbone_out.out, dim=-1)
-        t_length = outputs.backbone_out.t_length
-        loss = 0.
-        
-        if self.weights[0] > 0.:
-            loss += self.ctc_loss(out, target.cpu().int(), t_length.cpu().int(), target_length.cpu().int()).mean()* self.weights[0]
-        if self.weights[1] > 0.:
-            heatmap_out = rearrange(heatmap_out, 'n c t h w -> (n t) c h w')
-            input_ = rearrange(input, 'n c t h w -> (n t) c h w')
-            loss += self.pose_loss(heatmap_out, input_) * self.weights[1]
-        return loss 
+

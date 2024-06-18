@@ -1,4 +1,4 @@
-from ..bilstm import BiLSTMLayer
+from ..components.bilstm import BiLSTMLayer
 from torch import nn
 from einops import rearrange
 from collections import namedtuple

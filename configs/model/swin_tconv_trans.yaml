@@ -1,16 +1,11 @@
 _target_: ${csi}.modules.base_stream.BaseStream
 encoder: 
-  _target_: ${csi}.modules.encoders.vitpose_encoder.VitPoseEncoder
-  img_size: 192
-  color_range: [0, 1]
-  cfg_path: ${vitpose_cfg}
-  checkpoint: ${vitpose_ckpt}
-  drop_path_rate: 0.5
-  freeze_vitpose: False
-  with_vitpool: False
+  _target_: ${csi}.modules.encoders.swin_encoder.SwinEncoder
+  cfg: ${swin_cfg}
+  ckpt: ${swin_ckpt}
 neck:
   _target_: ${csi}.modules.necks.tconv_neck.TemporalConvNeck
-  in_channels: 384
+  in_channels: 768
   out_channels: 1024
   bottle_channels: 512
   n_class: 1296

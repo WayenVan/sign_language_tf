@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from einops import rearrange
-from ..utils.misc import add_attributes
+from ...utils.misc import add_attributes
 
 class TransformerEncoder(nn.Module):
     

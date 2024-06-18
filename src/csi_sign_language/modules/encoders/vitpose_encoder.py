@@ -4,7 +4,7 @@ from mmengine import Config
 from mmpretrain.models.backbones.vision_transformer import VisionTransformer
 from torch import nn
 import torch
-from einops import rearrange
+from einops import rearrange, reduce
 
 from csi_sign_language.utils.data import mapping_0_1
 from collections import namedtuple
@@ -12,13 +12,25 @@ from collections import namedtuple
 
 class VitPoseEncoder(nn.Module):
     
-    def __init__(self, img_size, color_range, cfg_path, checkpoint, drop_path_rate, vit_pool_arch=None, freeze_vitpose=False, *args, **kwargs) -> None:
+    def __init__(
+        self, 
+        img_size, 
+        color_range, 
+        cfg_path, 
+        checkpoint, 
+        drop_path_rate, 
+        vit_pool_arch=None, 
+        freeze_vitpose=False,
+        with_vitpool=False,
+        *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         cfg = Config.fromfile(cfg_path)
 
         self.cfg = cfg
         self.color_range = color_range
         self.freeze_vitpose = freeze_vitpose
+        self.with_vitpool=with_vitpool
+
         self.register_buffer('std', torch.tensor(cfg.model.data_preprocessor.std))
         self.register_buffer('mean', torch.tensor(cfg.model.data_preprocessor.mean))
 
@@ -28,24 +40,25 @@ class VitPoseEncoder(nn.Module):
         del vitpose
 
         vit_out_channels = cfg.model.backbone.arch.embed_dims
-        if vit_pool_arch is None:
-            arch = {
-                'embed_dims': vit_out_channels,
-                'num_layers': 4,
-                'num_heads': 8,
-                'feedforward_channels': vit_out_channels * 2
-            }
-        else:
-            arch = vit_pool_arch
-        self.vitpool = VisionTransformer(
-            arch = arch,
-            img_size=(img_size + 4)//16,
-            patch_size=2,
-            in_channels=vit_out_channels,
-            drop_path_rate=drop_path_rate,
-            with_cls_token=True,
-            out_type='cls_token'
-        )
+        if with_vitpool:
+            if vit_pool_arch is None:
+                arch = {
+                    'embed_dims': vit_out_channels,
+                    'num_layers': 4,
+                    'num_heads': 8,
+                    'feedforward_channels': vit_out_channels * 2
+                }
+            else:
+                arch = vit_pool_arch
+            self.vitpool = VisionTransformer(
+                arch = arch,
+                img_size=(img_size + 4)//16,
+                patch_size=2,
+                in_channels=vit_out_channels,
+                drop_path_rate=drop_path_rate,
+                with_cls_token=True,
+                out_type='cls_token'
+            )
     
     
     def _data_preprocess(self, x):
@@ -63,8 +76,11 @@ class VitPoseEncoder(nn.Module):
         x = self._data_preprocess(x)
         
         feats = self.vit(x)
-        x = self.vitpool(feats[-1])[-1]
-        
+        if self.with_vitpool:
+            x = self.vitpool(feats[-1])[-1]
+        else:
+            #GAP
+            x = reduce(feats[-1], 'n c h w -> n c', 'mean')
         x = rearrange(x, '(n t) c -> n c t', t=T)
 
         VitPoseEncoderOut = namedtuple('VitPoseEncoderOut', ['out', 't_length'])

@@ -1,0 +1,7 @@
+_target_: ${csi}.modules.losses.distill_loss.VacDistLoss
+alpha: 1.0
+beta: 1.0
+sigma: 1.0
+tau: 8
+checkpoint: outputs/train/2024-05-14_22-07-53/epoch=54_wer-val=23.25_lr=0.00e+00_loss=0.00.ckpt
+cfg: outputs/train/2024-05-14_22-07-53/config.yaml

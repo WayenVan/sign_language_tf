@@ -4,21 +4,20 @@ defaults:
   - /resources@_global_
   - /hydra: no_output
   - /optimizer: adam
-  - /lr_scheduler: multistep
+  - /lr_scheduler: step
   - /datamodule: ph14
   - /transforms/train: 192x192
   - /transforms/test: 192x192
-  - /model: vitpose_tconv_trans
+  - /model: vitpose_adapter_heatmap_tconv_trans
   - /loss: vac
   
 seed: 3407
-epoch: 100
+epoch: 200
 tags: 
-  - vitpose_tconv_trans
-  - pytorch_lightning
+  - vitpose_adapter_heatmap
 
 #if continuos read model
-load_weights: True
+load_weights: False
 is_resume: False
 checkpoint: outputs/train_lightning/2024-04-24_01-42-41/last.ckpt
 
@@ -29,24 +28,20 @@ datamodule:
   num_workers: 6
   train_shuffle: False
 
-optimizer:
-  lr: 1e-7
-
-lr_scheduler:  
-  milestones: [40, 80]
-  gamma: 0.5
+# model:
+#   encoder:
+#     with_vitpool: True
 
 # optimizer:
-#   lr: 1e-4
+#   lr: 1e-7
 
-# lr_scheduler:
-#   milestones:
-#   - 20
-#   - 40
-#   - 55
-#   - 65
-#   - 75
-#   - 80
-#   - 85
-#   - 90
+# lr_scheduler:  
+#   milestones: [40, 80]
 #   gamma: 0.5
+
+optimizer:
+  lr: 5e-4
+
+lr_scheduler:
+  step_size: 40
+  gamma: 0.1

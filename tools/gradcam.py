@@ -57,7 +57,6 @@ def regist_hooks_vit(model: LightningModule):
     target_layer.register_backward_hook(bhook)
     target_layer.register_forward_hook(fhook)
 
-
 def regist_hooks_x3d(model: LightningModule):
     def reshape(x):
         return rearrange(x, 'n c t h w -> (n t) c h w')
