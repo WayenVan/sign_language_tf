@@ -23,7 +23,7 @@ import shutil
 #preprocess the data into lmdb format
 @click.command()
 @click.option('--data_root', default='dataset/phoenix2014-release')
-@click.option('--output_root', default='preprocessed/ph14')
+@click.option('--output_root', default='dataset/ph14')
 @click.option('--frame_size', nargs=2, default=(256, 256))
 @click.option('--subset', default='multisigner')
 @click.option('--multiprocess', default=True)

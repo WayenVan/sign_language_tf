@@ -1,0 +1,11 @@
+
+_target_: ${csi}.modules.clip_adapters.model.ClipAdapter
+n_class: 1296
+clip_model: ViT-B-16
+pretrained: openai
+img_size: [224, 224]
+adapter_spec:
+  position: [7, 8, 9, 10, 11, 12]
+  type: [L, L, L, G, G, G]
+  drop_path: [0.1, 0.1, 0.1, 0.2, 0.2, 0.2]
+pooling_spec: [6, 12]

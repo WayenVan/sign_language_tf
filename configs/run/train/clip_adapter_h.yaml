@@ -8,7 +8,7 @@ defaults:
   - /datamodule: ph14
   - /transforms/train: 224x224
   - /transforms/test: 224x224
-  - /model: clip_adapter
+  - /model: clip_adapter_h
   - /loss: vac
   
 seed: 3407
