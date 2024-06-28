@@ -50,7 +50,7 @@ class ClipAdapter(nn.Module):
         self._freeze_vit()
     
     def train(self, mode=True):
-        super.train(mode)
+        super().train(mode)
         self.vit.eval()
     
     def _freeze_vit(self):
