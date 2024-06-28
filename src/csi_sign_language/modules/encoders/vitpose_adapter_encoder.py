@@ -84,7 +84,8 @@ class VitPoseAdapterEncoder(nn.Module):
         adapter_out = self.forward_adapter(x, intermediate_feats)
 
         x = reduce(adapter_out, 'n c h w -> n c', 'mean')
-        x = rearrange(x, '(n t) c -> n c t', t=T)
+        vit_feat = reduce(intermediate_feats[-1], 'n c h w -> n c', 'mean')
+        x = rearrange(x+vit_feat, '(n t) c -> n c t', t=T)
 
         return self.VitPoseAdapterEncoderOut(
             out=x,

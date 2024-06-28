@@ -1,11 +1,19 @@
 import torch 
+from collections import OrderedDict
 
-p = torch.load('outputs/train_lightning/2024-04-10_18-53-03/last.ckpt', map_location='cpu')
+p = torch.load('resources/clip/clip-vit-base-p16_laion2b-pre_3rdparty_in1k-384px_20221220-558ed826.pth', map_location='cpu')
 a = 0
+
+import re
+pattern = re.compile(r'^backbone.')
+replacement = ''
+new_dict = OrderedDict()
+
+for key,value in p['state_dict'].items():
+    if pattern.match(key):
+        new_key = pattern.sub(replacement, key)
+        new_dict[new_key] = value
 
 import sys
 sys.path.append('src')
-from csi_sign_language.modules.tconv import TemporalConv1D
 
-
-TemporalConv1D(12, 12, 12, d=1.)

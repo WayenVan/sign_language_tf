@@ -57,6 +57,7 @@ class VitPoseAdapterEncoder(nn.Module):
             'vit_feats_indices': [1, 3, 5, 7],
         },
         heatmap_neck_channels=128,
+        output_type='fused',
         dropout=0.5,
         *args, **kwargs) -> None:
         super().__init__()
@@ -64,6 +65,7 @@ class VitPoseAdapterEncoder(nn.Module):
 
         self.cfg = cfg
         self.color_range = color_range
+        self.output_type = output_type
 
         self.register_buffer('std', torch.tensor(cfg.model.data_preprocessor.std))
         self.register_buffer('mean', torch.tensor(cfg.model.data_preprocessor.mean))
@@ -118,11 +120,16 @@ class VitPoseAdapterEncoder(nn.Module):
         )
 
         #adapter forward
-        adapter_out = self.forward_adapter(x, intermediate_feats)
+        x0 = reduce(heatmap_feats, 'n c h w -> n c', 'mean')
+        
+        if self.output_type == 'fused':
+            adapter_out = self.forward_adapter(x, intermediate_feats)
+            x1 = reduce(adapter_out, 'n c h w -> n c', 'mean')
+            x = x0+x1
 
-        x0 = reduce(adapter_out, 'n c h w -> n c', 'mean')
-        x1 = reduce(heatmap_feats, 'n c h w -> n c', 'mean')
-        x = rearrange(x0+x1, '(n t) c -> n c t', t=T)
+        if self.output_type == 'pose':
+            x = x0
+        x = rearrange(x, '(n t) c -> n c t', t=T)
 
         return self.VitPoseAdapterEncoderOut(
             out=x,

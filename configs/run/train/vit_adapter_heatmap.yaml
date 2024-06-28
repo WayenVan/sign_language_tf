@@ -40,8 +40,8 @@ datamodule:
 #   gamma: 0.5
 
 optimizer:
-  lr: 5e-4
+  lr: 1e-4
 
 lr_scheduler:
-  step_size: 40
+  step_size: 50
   gamma: 0.1

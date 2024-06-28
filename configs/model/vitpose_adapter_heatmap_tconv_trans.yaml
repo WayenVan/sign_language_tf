@@ -4,6 +4,7 @@ encoder:
   color_range: [0, 1]
   cfg_path: ${vitpose_cfg}
   checkpoint: ${vitpose_ckpt}
+  output_type: pose
   adapter_archs:
     stem_channel: 48
     channels: [48, 96, 192, 384]

@@ -1,0 +1,18 @@
+_target_: ${T}.Compose
+transforms: 
+- _target_: ${CT}.common.ApplyByKey
+  key: video
+  transforms:
+  - _target_: ${CT}.common.ToTensor
+    dtype: float32
+  - _target_: ${CT}.common.Rearrange
+    pattern: "t h w c -> t c h w"
+  - _target_: ${CT}.common.Rescale
+    input: [0., 255.]
+    output: [0., 1.]
+  - _target_: ${T}.CenterCrop
+    size: 224
+- _target_: ${CT}.common.ApplyByKey
+  key: gloss
+  transforms:
+  - _target_: ${CT}.common.ToTensor

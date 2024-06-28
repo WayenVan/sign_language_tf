@@ -9,7 +9,7 @@ encoder:
     channels: [48, 96, 192, 384]
     vit_feats_indices: [2, 5, 8, 11]
     num_heads: 8
-  dropout: 0.2
+  dropout: 0.1
 neck:
   _target_: ${csi}.modules.necks.tconv_neck.TemporalConvNeck
   in_channels: 384

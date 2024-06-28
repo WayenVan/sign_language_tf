@@ -9,7 +9,7 @@ from lightning import Trainer
 from mmpretrain.models.backbones.levit import LeViT
 def test_model():
     hydra.initialize_config_dir('/home/jingyan/Documents/sign_language_transformer/configs')
-    cfg = hydra.compose('run/train/vit_adapter_heatmap')
+    cfg = hydra.compose('run/train/vit_adapter')
     index = 0
 
     datamodule = instantiate(cfg.datamodule)
