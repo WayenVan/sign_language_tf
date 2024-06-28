@@ -62,7 +62,8 @@ def main(cfg: DictConfig):
     
     t = trainer.Trainer(
         accelerator='gpu',
-        strategy='ddp_find_unused_parameters_true',
+        # strategy='ddp_find_unused_parameters_true',
+        strategy='ddp',
         devices=2,
         callbacks=[ckpt_callback, lr_callback, debug_callback, rich_callback],
         logger=logger,
