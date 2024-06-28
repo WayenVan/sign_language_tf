@@ -50,9 +50,9 @@ class LocalTemp(nn.Module):
 
     def forward(self, x):
         #x [t n c]
-        x = rearrange(x, 't n c -> n c t')
+        x = rearrange(x, 't n c -> n c t').contiguous()
         x = self.dwconv(x)
-        x = rearrange(x, 'n c t -> t n c')
+        x = rearrange(x, 'n c t -> t n c').contiguous()
         return x
 
 class Fusion(nn.Module):
@@ -73,19 +73,19 @@ class Fusion(nn.Module):
         """
         T, _, _ = x.shape
 
-        f_p = rearrange(f_p, 'n c t -> t n c')
-        f_cls = rearrange(f_cls, 'n t c -> t n c')
+        f_p = rearrange(f_p, 'n c t -> t n c').contiguous()
+        f_cls = rearrange(f_cls, 'n t c -> t n c').contiguous()
         f_k = torch.stack((f_p, f_cls), dim=0)
         
-        f_k = rearrange(f_k, 'k t n c -> k (t n) c')
-        f_q = rearrange(x, '(q t) n c -> q (t n) c', q=1)
+        f_k = rearrange(f_k, 'k t n c -> k (t n) c').contiguous()
+        f_q = rearrange(x, '(q t) n c -> q (t n) c', q=1).contiguous()
         
         f_k = self.norm_k(f_k)
         f_q = self.norm_q(f_q)
         
         out, _ = self.fusion(f_q, f_k, f_k)
         out = self.norm_out(out)
-        out = rearrange(out, 'q (t n) c -> (q t) n c', t=T)
+        out = rearrange(out, 'q (t n) c -> (q t) n c', t=T).contiguous()
         return out
         
 
@@ -116,9 +116,9 @@ class Pooling(nn.Module):
         :param t_length: [n]
         """
         
-        f_global = rearrange(f_global, 't n c -> n c t')
+        f_global = rearrange(f_global, 't n c -> n c t').contiguous()
         f_global = self.t_pooling_g(f_global)
-        f_global = rearrange(f_global, 'n c t -> t n c')
+        f_global = rearrange(f_global, 'n c t -> t n c').contiguous()
         
         return self.t_pooling_feats(f_vit), self.t_pooling_feats(f_adapter), f_global, t_length//2
 
@@ -156,15 +156,15 @@ class AdapterBlock(nn.Module):
 
         f_cls = f_vit[:, :, 0]
         f_vit = f_vit[:, :, 1:]
-        f_vit = rearrange(f_vit, 'n t (h w) c -> n c t h w', h=H, w=W)
+        f_vit = rearrange(f_vit, 'n t (h w) c -> n c t h w', h=H, w=W).contiguous()
         
         f_add = f_vit + f_adapter
         f_add = f_add + self.drop_path(self.map_projection(f_add))
-        f_add = rearrange(f_add, 'n c t h w -> n t h w c')
+        f_add = rearrange(f_add, 'n c t h w -> n t h w c').contiguous()
         f_add = f_add + self.drop_path(self.ffn_f(f_add))
-        f_add = rearrange(f_add, 'n t h w c -> n c t h w')
+        f_add = rearrange(f_add, 'n t h w c -> n c t h w').contiguous()
         
-        f_p = reduce(f_add, 'n c t h w -> n c t', 'mean')
+        f_p = reduce(f_add, 'n c t h w -> n c t', 'mean').contiguous()
         f_global = self.fusion(f_global, f_cls, f_p)
         
         if self.t == 'local':
@@ -196,7 +196,7 @@ class Stem(nn.Module):
         x = self.norm(x)
         
         _, _, T, _, _ = x.shape
-        x = rearrange(x, 'n c t h w -> (n t ) c h w')
+        x = rearrange(x, 'n c t h w -> (n t ) c h w').contiguous()
         x = nn.functional.interpolate(x, (self.target_size[0], self.target_size[1]), mode='bilinear')
-        x = rearrange(x, '(n t) c h w -> n c t h w', t=T)
+        x = rearrange(x, '(n t) c h w -> n c t h w', t=T).contiguous()
         return x

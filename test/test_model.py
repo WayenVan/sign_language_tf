@@ -6,10 +6,11 @@ from hydra.utils import instantiate
 from omegaconf import OmegaConf
 from csi_sign_language.models.slr_model import SLRModel
 from lightning import Trainer
+from lightning.pytorch import callbacks
 from mmpretrain.models.backbones.levit import LeViT
 def test_model():
     hydra.initialize_config_dir('/home/jingyan/Documents/sign_language_transformer/configs')
-    cfg = hydra.compose('run/train/vit_adapter')
+    cfg = hydra.compose('run/train/clip_adapter')
     index = 0
 
     datamodule = instantiate(cfg.datamodule)
@@ -26,6 +27,7 @@ def test_model():
         logger=False,
         enable_checkpointing=False,
         precision=16,
+        callbacks=[callbacks.RichProgressBar()]
     )
     
     t.fit(lightning_module, datamodule)

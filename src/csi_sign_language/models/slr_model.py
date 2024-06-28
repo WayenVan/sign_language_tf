@@ -161,11 +161,17 @@ class VACLoss(nn.Module):
 
     def __init__(self, weights, temp, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
+        self.weights = weights
         self.loss = _VACLoss(weights, temp)
 
     def forward(self, outputs, input, input_length, target, target_length): 
-        conv_out = outputs.neck_out.out
-        conv_length = outputs.neck_out.t_length
+        
+        if self.weights[2] > 0. or self.weights[1] > 0.:
+            conv_out = outputs.neck_out.out
+            conv_length = outputs.neck_out.t_length
+        else:
+            conv_out = None
+            conv_length = None
 
         seq_out = outputs.out
         t_length = outputs.t_length

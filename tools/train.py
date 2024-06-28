@@ -28,7 +28,7 @@ from lightning.pytorch import plugins
 from torch.cuda.amp.grad_scaler import GradScaler
 from torch.utils.tensorboard.writer import SummaryWriter
 
-@hydra.main(version_base='1.3.2', config_path='../configs', config_name='run/train/vit_adapter')
+@hydra.main(version_base='1.3.2', config_path='../configs', config_name='run/train/clip_adapter')
 def main(cfg: DictConfig):
     seed_everything(cfg.seed, workers=True)
 

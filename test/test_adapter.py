@@ -16,10 +16,15 @@ def main():
         'ViT-B-16',
         'openai',
         img_size=(224, 224),
+        # adapter_spec={
+        #     'position': (2, 4, 6, 8, 10, 12),
+        #     'type': ('L', 'L', 'L', 'L', 'L', 'G'),
+        #     'drop_path': (0., 0., 0., 0., 0., 0.),
+        # },
         adapter_spec={
-            'position': (2, 4, 6, 8, 10, 12),
-            'type': ('L', 'L', 'L', 'G', 'G', 'G'),
-            'drop_path': (0., 0., 0., 0., 0., 0.),
+            'position': (3, 6, 9, 12),
+            'type': ('L', 'L', 'L', 'G'),
+            'drop_path': (0., 0., 0., 0.),
         },
         pooling_spec=(0, 6)
     )

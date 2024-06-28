@@ -46,6 +46,12 @@ class ClipAdapter(nn.Module):
         
         self.adapter_proj = nn.Linear(self.embed_dim, self.vit.output_dim)
         self.header = nn.Linear(self.vit.output_dim, n_class)
+        
+        self._freeze_vit()
+    
+    def _freeze_vit(self):
+        for p in self.vit.parameters():
+            p.requires_grad = False
     
     def _create_poolings(self, pooling_spec):
         self.poolings = nn.ModuleDict()
@@ -79,7 +85,7 @@ class ClipAdapter(nn.Module):
         :param t_length: [n]
         """
         x = self.pre_proecess(x)
-        f_vit = self.vit_stem_forward(rearrange(x, 'n c t h w -> (n t) c h w'))
+        f_vit = self.vit_stem_forward(rearrange(x, 'n c t h w -> (n t) c h w').contiguous())
         f_adapter = self.adapter_stem(x)
         
         f_vit, f_adapter, f_global, t_length = self.block_forward(
@@ -103,11 +109,12 @@ class ClipAdapter(nn.Module):
 
     def pre_proecess(self, x):
         T = int(x.size(2))
-        x = rearrange(x, 'n c t h w -> (n t) c h w')
+        x = rearrange(x, 'n c t h w -> (n t) c h w').contiguous()
         x = self.data_norm(x)
-        x = rearrange(x, '(n t) c h w -> n c t h w', t=T)
+        x = rearrange(x, '(n t) c h w -> n c t h w', t=T).contiguous()
         return x
         
+    @torch.no_grad()
     def vit_stem_forward(self, x):
         x = self.vit.conv1(x)  # shape = [*, width, grid, grid]
         x = x.reshape(x.shape[0], x.shape[1], -1)  # shape = [*, width, grid ** 2]
@@ -132,7 +139,7 @@ class ClipAdapter(nn.Module):
         N,_,T,_,_ = f_adapter.shape
         f_vit = f_vit.permute(1, 0, 2)  # NLD -> LND
 
-        f_global = repeat(self.f_global, 'd -> t n d', n=N, t=T)
+        f_global = repeat(self.f_global, 'd -> t n d', n=N, t=T).contiguous()
 
         t: Transformer = self.vit.transformer
         for i in range(len(t.resblocks)+1):
@@ -151,12 +158,14 @@ class ClipAdapter(nn.Module):
                 f_vit = rearrange(f_vit, 'n t l c -> l (n t) c')
 
                 if i < len(t.resblocks):
-                    f_vit = t.resblocks[i](f_vit, attn_mask=None)
+                    with torch.no_grad():
+                        f_vit = t.resblocks[i](f_vit, attn_mask=None)
 
         f_vit = f_vit.permute(1, 0, 2)  # LND -> NLD
 
         return f_vit, f_adapter, f_global, t_length
 
+    @torch.no_grad()
     def vit_post_forward(self, x):
         if self.vit.attn_pool is not None:
             if self.vit.attn_pool_contrastive is not None:
