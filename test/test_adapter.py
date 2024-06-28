@@ -30,7 +30,9 @@ def main():
     )
     
     model.to('cuda:1')
-    model(x, l)
+    for name, p in model.named_parameters():
+        print(name)
+        
     
     
 if __name__ == '__main__':
