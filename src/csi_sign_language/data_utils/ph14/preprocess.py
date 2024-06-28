@@ -13,15 +13,14 @@ from typing import *
 import numpy as np
 import cv2
 from einops import rearrange
-from csi_sign_language.utils.data import VideoGenerator
+from ...utils.data import VideoGenerator
 from omegaconf import OmegaConf
 import json
-from csi_sign_language.utils.lmdb_tool import store_data, retrieve_data
+from ...utils.lmdb_tool import store_data, retrieve_data
 import lmdb
 import shutil
 
 #preprocess the data into lmdb format
-
 @click.command()
 @click.option('--data_root', default='dataset/phoenix2014-release')
 @click.option('--output_root', default='preprocessed/ph14')
