@@ -1,7 +1,7 @@
 import torch
 from einops import rearrange, reduce
 from torch import nn
-from .drop_path import DropPath
+from ..components.drop_path import DropPath
 
 class FFN(nn.Module):
     

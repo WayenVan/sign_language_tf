@@ -80,7 +80,9 @@ class SLRModel(L.LightningModule):
         self.post_process: IPostProcess = fn
 
     def forward(self, x, t_length) -> Any:
-        return self.backbone(x, t_length)
+        outputs = self.backbone(x, t_length)
+        hyp = self._outputs2labels(outputs.out, outputs.t_length)
+        return outputs, hyp
     
     def predict_step(self, batch, batch_id) -> Any:
         id, video, gloss, video_length, gloss_length, gloss_gt = self._extract_batch(batch)
