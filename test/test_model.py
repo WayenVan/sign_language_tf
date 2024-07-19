@@ -10,7 +10,7 @@ from lightning.pytorch import callbacks
 from mmpretrain.models.backbones.levit import LeViT
 def test_model():
     hydra.initialize_config_dir('/home/jingyan/Documents/sign_language_transformer/configs')
-    cfg = hydra.compose('run/train/clip_adapter')
+    cfg = hydra.compose('run/train/vifi_clip')
     index = 0
 
     datamodule = instantiate(cfg.datamodule)
@@ -21,9 +21,9 @@ def test_model():
     
     t = Trainer(
         accelerator='gpu',
-        strategy='ddp',
+        strategy='ddp_find_unused_parameters_true',
         max_steps=3,
-        devices=1,
+        devices=[1],
         logger=False,
         enable_checkpointing=False,
         precision=16,

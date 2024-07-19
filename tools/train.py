@@ -28,7 +28,7 @@ from lightning.pytorch import plugins
 from torch.cuda.amp.grad_scaler import GradScaler
 from torch.utils.tensorboard.writer import SummaryWriter
 
-@hydra.main(version_base='1.3.2', config_path='../configs', config_name='run/train/clip_adapter')
+@hydra.main(version_base='1.3.2', config_path='../configs', config_name='run/train/vifi_clip')
 def main(cfg: DictConfig):
     seed_everything(cfg.seed, workers=True)
 
@@ -64,7 +64,7 @@ def main(cfg: DictConfig):
         accelerator='gpu',
         # strategy='ddp_find_unused_parameters_true',
         strategy='ddp',
-        devices=2,
+        devices=[1],
         callbacks=[ckpt_callback, lr_callback, debug_callback, rich_callback],
         logger=logger,
         log_every_n_steps=50,
@@ -119,8 +119,9 @@ class DebugCallback(Callback):
         self.logger.experiment['tensorboard_dir'] = self.tb_dir
         
     def on_train_start(self, trainer: Trainer, pl_module: LightningModule) -> None:
-        if trainer.local_rank == 0:
-            self.writer = SummaryWriter(self.tb_dir)
+        # if trainer.local_rank == 0:
+        #     self.writer = SummaryWriter(self.tb_dir)
+        pass
         
     def on_before_optimizer_step(self, trainer: Trainer, pl_module: LightningModule, optimizer: Optimizer) -> None:
         # scaler: GradScaler = trainer.strategy.precision_plugin.scaler
@@ -128,18 +129,18 @@ class DebugCallback(Callback):
         # self.logger.experiment['training/scaler'].append(scale)
     
         # inspect gradient here
-        if trainer.local_rank == 0:
-            if trainer.global_step % 500 == 0:
-                for name, p in pl_module.named_parameters():
-                    if 'backbone' in name:
-                        self.writer.add_histogram(name, p.clone().detach().cpu().numpy(), trainer.global_step)
-                        if p.grad is None:
-                            print(f'none name: {name}', file=sys.stderr)
-                            return
-                        if not torch.isnan(p.grad).any():
-                            self.writer.add_histogram(name+'/grad', p.grad.clone().detach().cpu().numpy(), trainer.global_step)
-                        else:
-                            print(f'nan occured, name: {name}', file=sys.stderr)
+        # if trainer.local_rank == 0:
+        #     if trainer.global_step % 500 == 0:
+        #         for name, p in pl_module.named_parameters():
+        #             if 'backbone' in name:
+        #                 self.writer.add_histogram(name, p.clone().detach().cpu().numpy(), trainer.global_step)
+        #                 if p.grad is None:
+        #                     print(f'none name: {name}', file=sys.stderr)
+        #                     return
+        #                 if not torch.isnan(p.grad).any():
+        #                     self.writer.add_histogram(name+'/grad', p.grad.clone().detach().cpu().numpy(), trainer.global_step)
+        #                 else:
+        #                     print(f'nan occured, name: {name}', file=sys.stderr)
         pass
         
     

@@ -1,0 +1,26 @@
+_target_: ${csi}.modules.base_stream.BaseStream
+encoder: 
+  _target_: ${csi}.modules.vifi_clip.vifi_clip_encoder.ClipEncoder
+  vifi_clip_ckpt: resources/vifi_clip/vifi_clip_10_epochs_k400_full_finetuned.pth
+  num_prompts: 4
+  output_dim: 512
+  num_local_prompts: 0
+  local_prompts_depth: 0
+  fusion_expand_factor: 2
+neck:
+  _target_: ${csi}.modules.necks.tconv_neck.TemporalConvNeck
+  in_channels: 512
+  out_channels: 512
+  bottle_channels: 1024
+  n_class: 1296
+  with_header: False,
+  pooling: max
+  dropout: 0.2
+decoder:
+  _target_: ${csi}.modules.decoders.transformer_decoder.TransformerDecoder
+  n_class: 1296
+  d_model: 512
+  n_heads: 8
+  n_layers: 4
+  d_feedforward: 1024
+  dropout: 0.5

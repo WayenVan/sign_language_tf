@@ -1,4 +1,5 @@
 import torch
+import random
 from torch import nn
 from einops import rearrange, einsum, repeat
 from ..components.drop_path import DropPath
@@ -58,8 +59,8 @@ class SparseAttention(nn.Module):
         t1 = time.time()
         with torch.no_grad():
             mask = self.mask_generator(Lq, Lk, q.device)
-            mask = repeat(mask, 'q k -> n q k', n=N).contiguous()
             if key_length is not None:
+                mask = repeat(mask, 'q k -> n q k', n=N).contiguous()
                 for i in range(N):
                     mask[i, :, :key_length[i]] = 1
             mask = mask.bool()
@@ -69,15 +70,65 @@ class SparseAttention(nn.Module):
         q, k, v = tuple(rearrange(x, 't n c -> n t c') for x in (q, k, v))
         with torch.cuda.device(q.device):
             t3 = time.time()
-        y = self.attn(q, k, v, att_mask=mask)
-        t4 = time.time()
+            y = self.attn(q, k, v, att_mask=mask)
+            t4 = time.time()
         y = rearrange(y, 'n t c -> t n c')
-        
-        
-        t5 = time.time()
-        print(t1-t, t2-t1, t3-t2, t4-t3, t5-t4)
-
+        print(t1-t, t2-t1, t3-t2, t4-t3)
         return y
+    
+
+class BucketRandomAttention(nn.Module):
+    
+    def __init__(
+        self, 
+        d_model,
+        num_heads,
+        bucket_size,
+        *args,
+        **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        
+        self.attn = nn.MultiheadAttention(
+            d_model,
+            num_heads,
+        )
+        self.bucket_size = bucket_size
+    
+    @staticmethod
+    def split_list_into_groups(lst, group_size):
+        return [lst[i:i + group_size] for i in range(0, len(lst), group_size)]
+    
+    @staticmethod
+    def make_mask(length, index, device):
+        N = length.shape[0]
+        L = len(index)
+        index = torch.tensor(index, dtype=torch.int64, device=device)
+        mask = torch.zeros((N, L), device=device).bool()
+        for i in range(N):
+                mask[i, :] = (index >= length[i])
+
+        return mask
+        
+    def forward(self, q, k, v, key_length=None):
+        # [t n c]
+        Lk = k.shape[0]
+        groups = self.split_list_into_groups(list(range(Lk)), self.bucket_size)
+        sampled_index = [random.choice(group) for group in groups]
+        
+        k = k[sampled_index, :, :]
+        v = v[sampled_index, :, :]
+
+        if key_length is not None:
+            mask = self.make_mask(Lk, key_length, q.device)
+        else:
+            mask = None
+
+        return self.attn(q, k, v, key_padding_mask=mask)
+
+
+        
+        
+        
 
         
 class ConvHeader(nn.Module):

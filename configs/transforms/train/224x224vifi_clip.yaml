@@ -1,0 +1,27 @@
+_target_: ${T}.Compose
+transforms: 
+  #process video data
+- _target_: ${CT}.common.ApplyByKey
+  key: video
+  transforms:
+  # t h w c
+  - _target_: ${CT}.t_numpy.RandomCrop
+    size: 224
+  - _target_: ${CT}.common.ToTensor
+    dtype: float32
+  - _target_: ${CT}.common.Rearrange
+    pattern: "t h w c -> t c h w"
+  - _target_: ${T}.RandomHorizontalFlip
+    p: 0.5
+  - _target_: ${CT}.common.TemporalAug
+    t_min: 0.8
+    t_max: 1.2
+    n_frame_max: 400
+  - _target_: ${T}.Normalize
+    mean: [123.675, 116.28, 103.53]
+    std: [58.395, 57.12, 57.375]
+  #process gloss data
+- _target_: ${CT}.common.ApplyByKey
+  key: gloss
+  transforms:
+  - _target_: ${CT}.common.ToTensor
