@@ -5,7 +5,7 @@ sys.path.append('src')
 from hydra.utils import instantiate
 from omegaconf import OmegaConf
 from csi_sign_language.modules.clip_adapters.model import ClipAdapter
-from csi_sign_language.modules.decoders.efficient_decoder import SparseAttention, RandomMaskGenerator, DiagonalMaskGenerator, BucketRandomAttention
+from csi_sign_language.modules.efficient_decoder.efficient_attention import SparseAttention, RandomMaskGenerator, DiagonalMaskGenerator, BucketRandomAttention
 from xformers.components import MultiHeadDispatch
 from xformers.components.attention import ScaledDotProduct
 import torch.distributed
@@ -33,6 +33,7 @@ def test_attn_mask():
         4,
         attention=ScaledDotProduct(),
     )
+
     
     m4 = BucketRandomAttention(
         1024,
@@ -40,7 +41,6 @@ def test_attn_mask():
         4
     )
 
-    
     #warm up 
     for i in range(8):
         attnetion_analysis(m4, t, t, t, device)

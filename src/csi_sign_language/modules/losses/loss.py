@@ -8,6 +8,7 @@ from einops import rearrange
 import torch.nn.functional as F
 
 
+
 class VACLoss:
 
     def __init__(self, weights, temperature) -> None:

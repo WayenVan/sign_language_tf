@@ -127,10 +127,6 @@ class BucketRandomAttention(nn.Module):
 
 
         
-        
-        
-
-        
 class ConvHeader(nn.Module):
     
     def __init__(

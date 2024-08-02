@@ -85,6 +85,7 @@ class TemporalAug:
     
     @staticmethod
     def get_scaled_frame_index(vlen, tmin=1, tmax=1, num_tokens=1, max_num_frames=400):
+        assert max_num_frames % 4 == 0
 
         if tmin==1 and tmax==1:
             if vlen <= max_num_frames:

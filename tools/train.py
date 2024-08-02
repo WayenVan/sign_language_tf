@@ -28,7 +28,7 @@ from lightning.pytorch import plugins
 from torch.cuda.amp.grad_scaler import GradScaler
 from torch.utils.tensorboard.writer import SummaryWriter
 
-@hydra.main(version_base='1.3.2', config_path='../configs', config_name='run/train/vifi_clip')
+@hydra.main(version_base='1.3.2', config_path='../configs', config_name='run/train/dual')
 def main(cfg: DictConfig):
     seed_everything(cfg.seed, workers=True)
 
@@ -76,7 +76,7 @@ def main(cfg: DictConfig):
                 precision='16-mixed',
                 device='cuda',
                 scaler=GradScaler(
-                    growth_interval=50,
+                    growth_interval=1000,
                 )
             ),
         ]

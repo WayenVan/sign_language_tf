@@ -1,17 +1,13 @@
-from typing import Any
 import torch
 import ctcdecode
-import numpy as np
-from itertools import groupby
-import torch.nn.functional as F
-import torchtext as tt
+from torchtext.vocab import Vocab
 from typing import *
 
 class CTCDecoder():
     
     def __init__(
         self, 
-        vocab: tt.vocab.Vocab, 
+        vocab: Vocab, 
         search_mode: Union[Literal['beam'], Literal['greedy']]='beam', 
         blank_id=0,
         batch_first=False,

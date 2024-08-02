@@ -1,0 +1,25 @@
+_target_: ${csi}.modules.base_stream.BaseStream
+encoder: 
+  _target_: ${csi}.modules.dual_encoder.dual_encoder.DualEncoder
+  dwpose_cfg: resources/dwpose-l/rtmpose-l_8xb64-270e_coco-ubody-wholebody-256x192.py
+  dwpose_ckpt: resources/dwpose-l/dw-ll_ucoco.pth
+  input_size: [224, 224]
+  dropout: 0.1
+  rgb_stream_arch: v3
+neck:
+  _target_: ${csi}.modules.necks.tconv_neck.TemporalConvNeck
+  in_channels: 1024
+  out_channels: 1024
+  bottle_channels: 1024
+  with_header: False,
+  pooling: mean
+  n_class: 1296
+  dropout: 0.2
+decoder:
+  _target_: ${csi}.modules.decoders.transformer_decoder.TransformerDecoder
+  n_class: 1296
+  d_model: 1024
+  n_heads: 8
+  n_layers: 6
+  d_feedforward: 2048
+  dropout: 0.2

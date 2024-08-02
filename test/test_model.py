@@ -3,15 +3,16 @@ import hydra
 import sys
 sys.path.append('src')
 from hydra.utils import instantiate
-from omegaconf import OmegaConf
 from csi_sign_language.models.slr_model import SLRModel
 from lightning import Trainer
 from lightning.pytorch import callbacks
-from mmpretrain.models.backbones.levit import LeViT
+import socket
+
 def test_model():
-    hydra.initialize_config_dir('/home/jingyan/Documents/sign_language_transformer/configs')
-    cfg = hydra.compose('run/train/vifi_clip')
+    hydra.initialize_config_dir('/root/projects/sign_language_transformer/configs')
+    cfg = hydra.compose('run/train/dual')
     index = 0
+    print(socket.gethostname())
 
     datamodule = instantiate(cfg.datamodule)
     vocab = datamodule.get_vocab()
