@@ -28,7 +28,7 @@ from lightning.pytorch import plugins
 from torch.cuda.amp.grad_scaler import GradScaler
 from torch.utils.tensorboard.writer import SummaryWriter
 
-@hydra.main(version_base='1.3.2', config_path='../configs', config_name='run/train/dual')
+@hydra.main(version_base='1.3.2', config_path='../configs', config_name='run/train/heatmapres')
 def main(cfg: DictConfig):
     seed_everything(cfg.seed, workers=True)
 
@@ -76,7 +76,7 @@ def main(cfg: DictConfig):
                 precision='16-mixed',
                 device='cuda',
                 scaler=GradScaler(
-                    growth_interval=1000,
+                    growth_interval=100,
                 )
             ),
         ]
@@ -127,6 +127,8 @@ class DebugCallback(Callback):
         # scaler: GradScaler = trainer.strategy.precision_plugin.scaler
         # scale = scaler.get_scale()
         # self.logger.experiment['training/scaler'].append(scale)
+        
+        a = 1
     
         # inspect gradient here
         # if trainer.local_rank == 0:

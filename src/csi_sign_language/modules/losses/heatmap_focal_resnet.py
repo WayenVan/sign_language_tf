@@ -14,8 +14,17 @@ from torch import Tensor
 import torch.nn.functional as F
 from mmpose.models import TopdownPoseEstimator
 from torchvision import transforms
+from torchvision.transforms.functional import normalize
 
+def focal_heatmap_loss(a, h, gamma=2.0, epsilon=1e-8):
 
+    assert (a >= 0 ).all(), f'a should be in [0, 1], but got min value: {a.min().item()}'
+    assert (a <= 1 ).all(), f'a should be in [0, 1], but got max value: {a.max().item()}'
+    assert (h >= 0 ).all(), f'heatmap should be in [0, 1], but got min value: {h.min().item()}'
+    assert (h <= 1 ).all(), f'heatmap should be in [0, 1], but got max value: {h.max().item()}'
+
+    return - (1 - h)**gamma * torch.log(1 - a + epsilon)
+    
 class Constants:
     left_hand = list(range(112, 133))
     righ_hand = list(range(91, 112))
@@ -25,23 +34,6 @@ class Constants:
 
     left_hand_center_ref = [121, 112]
     right_hand_center_ref = [100, 91]
-
-# @torch.no_grad()
-# def gaussian_heatmap(height, width, center_x: Tensor, center_y: Tensor, sigma: Tensor, device='cuda:1'):
-#     # sigma [stage]
-#     # [n ]
-#     x_coords = torch.arange(0, width).float().to(device)
-#     y_coords = torch.arange(0, height).float().to(device)
-#     y_grid, x_grid = torch.meshgrid(y_coords, x_coords, indexing='ij')
-#     y_grid, x_grid = (repeat(a, 'h w -> n s h w', n = 1, s=1).contiguous() for a in (y_grid, x_grid))
-#     center_x, center_y = (repeat(a, 'n -> n s h w', s=1, h=1, w=1).contiguous().to(device) for a in (center_x, center_y))
-#     sigma = repeat(sigma, 's -> n s h w', n=1, h=1, w=1).to(device).contiguous()
-
-#     # 计算高斯分布
-#     gaussian = torch.exp(-((x_grid - center_x)**2 + (y_grid - center_y)**2) / (2 * sigma**2))
-#     gaussian = gaussian / gaussian.max()
-#     #[n s h w]
-#     return gaussian
 
 #decode x, y to keypoints
 def decode(x, y, simcc_split_ratio):
@@ -53,26 +45,25 @@ def decode(x, y, simcc_split_ratio):
 
 @torch.no_grad()
 def gaussian_heatmap(
-    height, width, center_x: Tensor, center_y: Tensor, sigma: Tensor, target_height, target_width, device='cuda:1', ):
-    # sigma [stage]
-    # [n ]
+    height, width, target_height, target_width, 
+    center_x: Tensor, center_y: Tensor, 
+    sigma, device='cuda:1', ):
     
     x_coords = torch.arange(0, target_width).float().to(device)
     y_coords = torch.arange(0, target_height).float().to(device)
     y_grid, x_grid = torch.meshgrid(y_coords, x_coords, indexing='ij')
-    y_grid, x_grid = (repeat(a, 'h w -> n s h w', n = 1, s=1).contiguous() for a in (y_grid, x_grid))
+    y_grid, x_grid = (repeat(a, 'h w -> () h w', ) for a in (y_grid, x_grid))
     
-    center_x, center_y = (a * target_width / width for a in (center_x, center_y))
-    center_x, center_y = (repeat(a, 'n -> n s h w', s=1, h=1, w=1).contiguous().to(device) for a in (center_x, center_y))
-    sigma = repeat(sigma, 's -> n s h w', n=1, h=1, w=1).to(device).contiguous()
+    #rescale center_x and center_y to target size
+    center_x = center_x * target_width / width
+    center_y = center_y * target_height / height
+    center_x, center_y = (repeat(a, 'n -> n () ()').to(device) for a in (center_x, center_y))
 
     # 计算高斯分布
     gaussian = torch.exp(-((x_grid - center_x)**2 + (y_grid - center_y)**2) / (2 * sigma**2))
     gaussian = gaussian / gaussian.max()
-    #[n s h w]
+    #[n h w]
     return gaussian
-
-
 
 class PadResize:
     def __init__(self, input_size, target_size) -> None:
@@ -96,13 +87,7 @@ class PadResize:
         image = self.resize(image)
         return self.padding(image), self.resized_h, self.resized_w
     
-    # def remove_padding(self, image):
-    #     _, _, H, W = image.shape
-    #     assert H == self.target_h, W == self.target_w
-    #     return image[..., :-self.padding_h, :]
-        
-    
-class HeatmapLoss(nn.Module):
+class HeatmapFocalResnetLoss(nn.Module):
 
     def __init__(
         self, 
@@ -112,29 +97,40 @@ class HeatmapLoss(nn.Module):
         input_size,
         weights,
         sigmas,
-        stage_lambda,
+        num_stages,
+        stage_weights = None,
+        gamma = 2,
          *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         
-        assert len(sigmas) == len(stage_lambda), 'the number of stage should be the same'
+        assert len(sigmas) == num_stages, f'number of sigmas should be equal to number of stages, but got {len(sigmas)} and {num_stages}'
 
-        # cfg = Config.fromfile(dw_pose_cfg)
+        cfg = Config.fromfile(dw_pose_cfg)
         init_default_scope('mmpose')
-        self.model: TopdownPoseEstimator = init_model(dw_pose_cfg, dw_pose_ckpt, device='cpu')
+        self.model: TopdownPoseEstimator = init_model(cfg, dw_pose_ckpt, device='cpu')
         self.pad_resize = PadResize(input_size, dw_pose_input_size)
-        self.n_padding_h = self.pad_resize.padding_h
-        self.dw_pose_input_size = dw_pose_input_size
+
+        self.mean = cfg.model.data_preprocessor.mean
+        self.std = cfg.model.data_preprocessor.std
+        self.gamma = gamma
+        
+        if stage_weights is None:
+            self.stage_weights = [1.0] * num_stages
+        else:
+            assert len(stage_weights) == num_stages
+            self.stage_weights = stage_weights
+
+        self.sigmas = sigmas
         self.ctc_weight, self.heatmap_weight = tuple(weights)
-
-        self.sigmas = nn.Parameter(torch.tensor(sigmas), requires_grad=False)
-        self.stage_lambda =nn.Parameter(torch.tensor(stage_lambda), requires_grad=False)
-
         self._loss_ctc = nn.CTCLoss(blank=0, reduction='none')
         self._freeze_pose_model()
     
     def _freeze_pose_model(self):
         for p in self.model.parameters():
             p.requires_grad = False
+    
+    def _pre_norm(self, x):
+        return normalize(x, self.mean, self.std)
 
     def forward(self, outputs, input, input_length, target, target_length): 
         loss = 0.0
@@ -144,55 +140,45 @@ class HeatmapLoss(nn.Module):
             loss += self.ctc_weight * ctc_loss
 
         if self.heatmap_weight > 0.:
-            heatmap_loss, _ = self._loss_heatmap(outputs.encoder_out.heatmaps, input)
+            heatmap_loss, _ = self._loss_heatmap(outputs.encoder_out.attn_weights, input)
             loss += self.heatmap_weight * heatmap_loss
         return loss
 
-
-    def _loss_heatmap(self, predicted_heatmap_logits, input):
-        # predicted_heatmap_logits t n s 2 h w
-        # stage_lambda [s]
+    def _loss_heatmap(self, attention_maps, input):
+        # attention maps: tuple of [t b heads hands&face h w]
         # input: [n c t h w]
-        predicted_heatmap_logits = rearrange(predicted_heatmap_logits, 't n s c h w -> (n t) s c h w')
-        input = rearrange(input, 'n c t h w -> (n t) c h w')
+        attention_maps = list(rearrange(a, 't b heads fh h w -> (b t) heads fh h w') for a in attention_maps)
+        input = rearrange(input, 'b c t h w -> (b t) c h w')
 
-        _, S1, _, H1, W1= predicted_heatmap_logits.shape
-
-        # n s h w
-        predicted_heatmap = nn.functional.gumbel_softmax(predicted_heatmap_logits, dim=-1, hard=True)[:, :, 1, :, :]
-        
+        loss = 0.0
         with torch.no_grad():
             # n s h w
-            target_heatmap = self._keypoints(input, H1, W1)
-            _, S2, H2, W2 = target_heatmap.shape
-            
-            # target_heatmap = rearrange(target_heatmap, 'n s h w -> (n s 1 h w')
-            # target_heatmap = nn.functional.interpolate(target_heatmap, (H1, W1), mode='bilinear')
-            # target_heatmap = rearrange(target_heatmap, '(n s) 1 h w -> n s h w', s=S2)
-
-        assert S1 == S2, f"stage should be the same, but got {S1} and {S2}"
-        assert H1 == H2, f"height should be the same, but got {H1} and {H2}"
-        assert W1 == W2, f"width should be the same, but got {W1} and {W2}"
-
-        loss = F.mse_loss(predicted_heatmap, target_heatmap, reduction='none')
-        # [n s h w]
-        loss = torch.mean(loss, dim=[0, 2, 3])[0]
-        loss = torch.sum(loss * self.stage_lambda)
-        # self._save_heatmap(target_heatmap, 'outputs/target_heatmap')
-        return loss, target_heatmap
-
+            kps, h, w = self._keypoints(input)
+            target_heatmaps = []
+            for i in range(len(attention_maps)):
+                target_h, target_w = attention_maps[i].shape[-2:]
+                sigma = self.sigmas[i]
+                # b fh h w
+                target_heatmap = self.draw_gaussian(kps, (h, w), (target_h, target_w), sigma)
+                target_heatmaps.append(target_heatmap)
+                target_heatmap = rearrange(target_heatmap, 'b fh h w -> b () fh h w')
+                # b heads fh h w
+                with torch.enable_grad():
+                    _loss = focal_heatmap_loss(attention_maps[i], target_heatmap, self.gamma)
+                    _loss = torch.mean(_loss)
+                    loss += _loss * self.stage_weights[i]
+                
+        return loss, target_heatmaps
 
     @torch.no_grad()
-    def _keypoints(self, input, patch_height, patch_width):
+    def _keypoints(self, input):
         #input [n c h w]
         N, _, _, _ = input.shape
         input, valid_h, valid_w = self.pad_resize.resize_pad(input)
+        input = self._pre_norm(input)
         x, y = self.model(input, None, 'tensor')
-
-        # n k
-        # keypoints = self.model.head.decode((x, y))
-        # kps = torch.stack(list(torch.from_numpy(keypoint['keypoints'][0]) for keypoint in keypoints))
         kps = decode(x, y, self.model.head.simcc_split_ratio)
+
         def append_centerpoints(predicted_points, centers):
             center_point = predicted_points[:, centers, :].mean(dim=1, keepdim=True)
             return torch.cat([predicted_points, center_point], dim=1)
@@ -200,18 +186,40 @@ class HeatmapLoss(nn.Module):
         #add a new center point for left hand and right hand
         kps = append_centerpoints(kps, Constants.left_hand_center_ref)
         kps = append_centerpoints(kps, Constants.right_hand_center_ref)
-        kps = kps[:, Constants.body + Constants.face + Constants.left_hand + Constants.righ_hand+[-1, -2]]
+
+        return kps, valid_h, valid_w
+    
+    @torch.no_grad()
+    def draw_gaussian(self, kps, image_space, target_size, sigma):
+
+        origin_h, origin_w = image_space
+        target_h, target_w = target_size
+        
+        N, _, _ = kps.shape
+        
+        kps_hands = kps[:, Constants.left_hand + Constants.righ_hand + [-2, -1]]
+        kps_face = kps[:, Constants.face]
+
+        _, length_hands, _ = kps_hands.shape
+        _, length_face, _ = kps_face.shape
+
+        kps = torch.cat([kps_hands, kps_face], dim=1)
 
         #generate gaussian heatmap
         kps = rearrange(kps, 'n k yx -> (n k) yx')
-        # gmap = gaussian_heatmap(self.dw_pose_input_size[0], self.dw_pose_input_size[1], kps[:, 0], kps[:, 1], self.sigmas, input.device)
         gmap = gaussian_heatmap(
-            valid_h, valid_w, kps[:, 0], kps[:, 1], self.sigmas, patch_height, patch_width, input.device)
-        gmap = rearrange(gmap, '(n k) s h w -> n k s h w', n=N)
-        gmap = torch.max(gmap, dim=1, keepdim=False)[0]
-        # [n s h w]
-        return gmap
+            origin_h, origin_w, 
+            target_h, target_w,
+            kps[:, 0], kps[:, 1], 
+            sigma, kps.device)
+        gmap = rearrange(gmap, '(n k) h w -> n k h w', n=N)
         
+        gmap_hands = gmap[:, :length_hands].max(dim=1)[0]
+        gmap_face = gmap[:, length_hands:].max(dim=1)[0]
+        
+        #b fh h w
+        return torch.stack([gmap_face, gmap_hands], dim=1)
+
     def _save_heatmap(self, heatmap, path):
         # n s h w
         heatmap = heatmap[0]
@@ -228,20 +236,18 @@ if __name__ == '__main__':
     ckpt = '/root/projects/sign_language_transformer/resources/dwpose-l/dw-ll_ucoco.pth'
     cfg = '/root/projects/sign_language_transformer/resources/dwpose-l/rtmpose-l_8xb64-270e_coco-ubody-wholebody-256x192.py'
 
-    loss = HeatmapLoss(
+    loss = HeatmapFocalResnetLoss(
         dw_pose_cfg=cfg,
         dw_pose_ckpt=ckpt,
         dw_pose_input_size=(256, 192),
         input_size=(224, 224),
         weights=[1.0, 1.0],
-        sigmas=[2, 1.5, 1.2, 1, 0.8],
-        stage_lambda=[1.0, 1.0, 1.0, 1.0, 1.0],
+        sigmas= [1, 0.8, 0.8],
+        num_stages=3
     ).to('cuda:1')
     
     image = '../resources/test_image.png'
     cfg = Config.fromfile(cfg)
-    std = torch.tensor(cfg.model.data_preprocessor.std)
-    mean = torch.tensor(cfg.model.data_preprocessor.mean)
     
     #prepare data
     from PIL import Image
@@ -268,31 +274,49 @@ if __name__ == '__main__':
     print(f'data type: {np.array(image).dtype}')
 
     data = torch.from_numpy(np.array(image)).float()
-    data = (data - std) / mean
     print(f'std: {data.std()}, mean: {data.mean()}')
 
     data = rearrange(data, ' h w c ->() c h w')
-    data = repeat(data, ' n c h w -> n c t h w', t=10)
+    data = repeat(data, ' n c h w -> n c t h w', t=100)
     data = data.to('cuda:1')
     
-    logits = torch.randn(10, 1, 5, 2, 8, 8).to('cuda:1')
-    loss, heatmap = loss._loss_heatmap(logits, data)
+    attention = [
+        torch.randn(100, 1, 12, 2, 12, 12).to('cuda:1'),
+        torch.randn(100, 1, 12, 2, 7, 7).to('cuda:1'),
+        torch.randn(100, 1, 12, 2, 4, 4).to('cuda:1'),
+    ]
+    
+    def transform(a : Tensor):
+        H = a.shape[-2]
+        a = rearrange(a, 't b heads fh h w -> t b heads fh (h w)')
+        a = F.softmax(a, dim=-1)
+        a = rearrange(a, 't b heads fh (h w) -> t b heads fh h w', h=H)
+        return a
+
+    attention = list(transform(a) for a in attention)
+    loss, heatmaps = loss._loss_heatmap(attention, data)
     print(loss)
 
     def blend_images(base_img, overlay_img, alpha=0.5):
         """Blend the base image with the overlay iMage."""
         return (1 - alpha) * base_img + alpha * overlay_img
     origin = np.array(image) / 255.0
-    h = heatmap[0, -1].cpu().numpy()
-    import cv2
-    h = cv2.resize(h, (224, 224))
-    def apply_colormap(heatmap):
-        """Apply a colormap to the heatmap and normalize."""
-        cmap = plt.get_cmap('jet')
-        heatmap_colored = cmap(heatmap)  # Apply colormap
-        return heatmap_colored[..., :3]  # Discard alpha channel
-    h = apply_colormap(h)
-    blend_image = blend_images(origin, h, alpha=0.6)
-    import matplotlib.pyplot as plt
-    plt.imshow(blend_image)
-    plt.savefig('outputs/blend_image.jpg')
+
+    for stage in range(3):
+        plt.clf()
+        h = heatmaps[stage][0, 1, :].cpu().numpy()
+        plt.imshow(h, cmap='hot', interpolation='nearest')
+        plt.colorbar()
+        plt.savefig('outputs/heatmap_stage{}.jpg'.format(stage))
+        import cv2
+        h = cv2.resize(h, (224, 224))
+        def apply_colormap(heatmap):
+            """Apply a colormap to the heatmap and normalize."""
+            cmap = plt.get_cmap('jet')
+            heatmap_colored = cmap(heatmap)  # Apply colormap
+            return heatmap_colored[..., :3]  # Discard alpha channel
+        h = apply_colormap(h)
+        blend_image = blend_images(origin, h, alpha=0.6)
+        import matplotlib.pyplot as plt
+        plt.imshow(blend_image)
+        plt.savefig('outputs/blend_image_stage{}.jpg'.format(stage))

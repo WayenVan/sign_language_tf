@@ -1,6 +1,7 @@
 import torch 
 from collections import OrderedDict
 
+from mmpretrain.models.backbones.vision_transformer import VisionTransformer
 p = torch.load('resources/vifi_clip/vifi_clip_10_epochs_k400_full_finetuned.pth', map_location='cuda:1')
 a = 0
 
@@ -14,9 +15,5 @@ for key,value in p['model'].items():
         new_key = pattern.sub(replacement, key)
         new_dict[new_key] = value
 
-import sys
-sys.path.append('src')
-import torch
-import torch
 
 

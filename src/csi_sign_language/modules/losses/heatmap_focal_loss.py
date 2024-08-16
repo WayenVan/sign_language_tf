@@ -16,6 +16,15 @@ from mmpose.models import TopdownPoseEstimator
 from torchvision import transforms
 
 
+def focal_heatmap_loss(a, h, gamma=2.0, epsilon=1e-8):
+
+    assert (a >= 0 ).all(), f'a should be in [0, 1], but got min value: {a.min().item()}'
+    assert (a <= 1 ).all(), f'a should be in [0, 1], but got max value: {a.max().item()}'
+    assert (h >= 0 ).all(), f'heatmap should be in [0, 1], but got min value: {h.min().item()}'
+    assert (h <= 1 ).all(), f'heatmap should be in [0, 1], but got max value: {h.max().item()}'
+
+    return - (1 - h)**gamma * torch.log(1 - a + epsilon)
+    
 class Constants:
     left_hand = list(range(112, 133))
     righ_hand = list(range(91, 112))
@@ -102,7 +111,7 @@ class PadResize:
     #     return image[..., :-self.padding_h, :]
         
     
-class HeatmapLoss(nn.Module):
+class HeatmapFocalLoss(nn.Module):
 
     def __init__(
         self, 
@@ -112,11 +121,13 @@ class HeatmapLoss(nn.Module):
         input_size,
         weights,
         sigmas,
-        stage_lambda,
+        stages,
+        stage_lambda = None,
+        gamma = 2,
          *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         
-        assert len(sigmas) == len(stage_lambda), 'the number of stage should be the same'
+        assert len(sigmas) == len(stages), f"sigmas should have the same length with stages, but got {len(sigmas)} and {len(stages)}"
 
         # cfg = Config.fromfile(dw_pose_cfg)
         init_default_scope('mmpose')
@@ -127,7 +138,14 @@ class HeatmapLoss(nn.Module):
         self.ctc_weight, self.heatmap_weight = tuple(weights)
 
         self.sigmas = nn.Parameter(torch.tensor(sigmas), requires_grad=False)
-        self.stage_lambda =nn.Parameter(torch.tensor(stage_lambda), requires_grad=False)
+        self.gamma = gamma
+        
+        if stage_lambda is not None:
+            self.stage_lambda =nn.Parameter(torch.tensor(stage_lambda), requires_grad=False)
+        else:
+            self.stage_lambda = nn.Parameter(torch.ones(len(stages), dtype=torch.float32), requires_grad=False)
+            
+        self.stages = tuple(sorted(stages, reverse=True))
 
         self._loss_ctc = nn.CTCLoss(blank=0, reduction='none')
         self._freeze_pose_model()
@@ -144,43 +162,41 @@ class HeatmapLoss(nn.Module):
             loss += self.ctc_weight * ctc_loss
 
         if self.heatmap_weight > 0.:
-            heatmap_loss, _ = self._loss_heatmap(outputs.encoder_out.heatmaps, input)
+            heatmap_loss, _ = self._loss_heatmap(outputs.encoder_out.attn_weights, input)
             loss += self.heatmap_weight * heatmap_loss
         return loss
 
-
-    def _loss_heatmap(self, predicted_heatmap_logits, input):
-        # predicted_heatmap_logits t n s 2 h w
-        # stage_lambda [s]
+    def _loss_heatmap(self, attention_maps, input):
+        # attention maps: [t n s head keys h w]
         # input: [n c t h w]
-        predicted_heatmap_logits = rearrange(predicted_heatmap_logits, 't n s c h w -> (n t) s c h w')
+        # stage_lambda [s]
+        attention_maps = attention_maps[:, :, self.stages]
+        attention_maps = rearrange(attention_maps, 't n s heads keys h w -> (n t) s heads keys h w')
         input = rearrange(input, 'n c t h w -> (n t) c h w')
 
-        _, S1, _, H1, W1= predicted_heatmap_logits.shape
+        _, S1, _, _, H1, W1 = attention_maps.shape
 
-        # n s h w
-        predicted_heatmap = nn.functional.gumbel_softmax(predicted_heatmap_logits, dim=-1, hard=True)[:, :, 1, :, :]
         
         with torch.no_grad():
             # n s h w
             target_heatmap = self._keypoints(input, H1, W1)
             _, S2, H2, W2 = target_heatmap.shape
-            
-            # target_heatmap = rearrange(target_heatmap, 'n s h w -> (n s 1 h w')
-            # target_heatmap = nn.functional.interpolate(target_heatmap, (H1, W1), mode='bilinear')
-            # target_heatmap = rearrange(target_heatmap, '(n s) 1 h w -> n s h w', s=S2)
+            # self._save_heatmap(target_heatmap, 'outputs/target_heatmap')
+            target_heatmap_ret = target_heatmap
 
         assert S1 == S2, f"stage should be the same, but got {S1} and {S2}"
         assert H1 == H2, f"height should be the same, but got {H1} and {H2}"
         assert W1 == W2, f"width should be the same, but got {W1} and {W2}"
-
-        loss = F.mse_loss(predicted_heatmap, target_heatmap, reduction='none')
-        # [n s h w]
-        loss = torch.mean(loss, dim=[0, 2, 3])[0]
+        
+        # n s heas key h w
+        target_heatmap = rearrange(target_heatmap, 'n s h w -> n s () () h w')
+        loss = focal_heatmap_loss(attention_maps, target_heatmap, gamma=self.gamma)
+        # n s heads key h w
+        loss = torch.sum(loss, dim=[-1, -2, -3])
+        # n s heads
+        loss = torch.mean(loss, dim=[0, 2])
         loss = torch.sum(loss * self.stage_lambda)
-        # self._save_heatmap(target_heatmap, 'outputs/target_heatmap')
-        return loss, target_heatmap
-
+        return loss, target_heatmap_ret
 
     @torch.no_grad()
     def _keypoints(self, input, patch_height, patch_width):
@@ -228,14 +244,14 @@ if __name__ == '__main__':
     ckpt = '/root/projects/sign_language_transformer/resources/dwpose-l/dw-ll_ucoco.pth'
     cfg = '/root/projects/sign_language_transformer/resources/dwpose-l/rtmpose-l_8xb64-270e_coco-ubody-wholebody-256x192.py'
 
-    loss = HeatmapLoss(
+    loss = HeatMapFocalLoss(
         dw_pose_cfg=cfg,
         dw_pose_ckpt=ckpt,
         dw_pose_input_size=(256, 192),
         input_size=(224, 224),
         weights=[1.0, 1.0],
         sigmas=[2, 1.5, 1.2, 1, 0.8],
-        stage_lambda=[1.0, 1.0, 1.0, 1.0, 1.0],
+        stages=[0, 1, 2, 3, 4]
     ).to('cuda:1')
     
     image = '../resources/test_image.png'
@@ -272,11 +288,13 @@ if __name__ == '__main__':
     print(f'std: {data.std()}, mean: {data.mean()}')
 
     data = rearrange(data, ' h w c ->() c h w')
-    data = repeat(data, ' n c h w -> n c t h w', t=10)
+    data = repeat(data, ' n c h w -> n c t h w', t=100)
     data = data.to('cuda:1')
     
-    logits = torch.randn(10, 1, 5, 2, 8, 8).to('cuda:1')
-    loss, heatmap = loss._loss_heatmap(logits, data)
+    attention = torch.randn(100, 1, 12, 12, 65, 64).to('cuda:1')
+    attention = F.softmax(attention, dim=-1)
+    attention = rearrange(attention, 't n s heads keys (h w) -> t n s heads keys h w', h=8, w=8)
+    loss, heatmap = loss._loss_heatmap(attention, data)
     print(loss)
 
     def blend_images(base_img, overlay_img, alpha=0.5):

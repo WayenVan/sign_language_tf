@@ -43,7 +43,7 @@ class SLRModel(L.LightningModule):
 
         self.train_ids_epoch = []
         self.val_ids_epoch = []
-        self.backbone.register_backward_hook(self.check_gradients)
+        # self.backbone.register_backward_hook(se()lf.check_gradients)
         
     @torch.no_grad()
     def _outputs2labels(self, out, length):
@@ -98,8 +98,12 @@ class SLRModel(L.LightningModule):
     def training_step(self, batch, batch_idx):
         id, video, gloss, video_length, gloss_length, gloss_gt = self._extract_batch(batch)
 
-        outputs = self.backbone(video, video_length)
-        loss = self.loss(outputs, video, video_length, gloss, gloss_length)
+        try:
+            outputs = self.backbone(video, video_length)
+            loss = self.loss(outputs, video, video_length, gloss, gloss_length)
+        except torch.cuda.OutOfMemoryError as e:
+            print(f'cuda out of memory! the t_length is {video.size(2)}')
+            raise e
         
         # if we should skip this batch
         skip_flag = torch.tensor(0, dtype=torch.uint8, device=self.device)
@@ -118,7 +122,7 @@ class SLRModel(L.LightningModule):
 
         hyp = self._outputs2labels(outputs.out.detach(), outputs.t_length.detach())
 
-        self.log('train_loss', loss, on_epoch=True, on_step=False, prog_bar=True, sync_dist=True)
+        self.log('train_loss', loss, on_epoch=True, on_step=True, prog_bar=True, sync_dist=True)
         self.log('train_wer', wer_calculation(gloss_gt, hyp), on_step=False, on_epoch=True, sync_dist=True)
         self.train_ids_epoch += id
         return loss

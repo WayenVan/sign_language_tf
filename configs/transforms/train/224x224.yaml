@@ -20,6 +20,7 @@ transforms:
   - _target_: ${CT}.common.Rescale
     input: [0., 255.]
     output: [0., 1.]
+    #final output is [0, 1]
   #process gloss data
 - _target_: ${CT}.common.ApplyByKey
   key: gloss

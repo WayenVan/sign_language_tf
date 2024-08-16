@@ -1,0 +1,22 @@
+_target_: ${csi}.modules.base_stream.BaseStream
+encoder: 
+  _target_: ${csi}.modules.ViTAttnEncoder
+  arch: vit-base-p32
+  checkpoint: resources/vit-base/vit-base-p32_in21k-pre-3rdparty_ft-64xb64_in1k-384_20210928-9cea8599.pth
+neck:
+  _target_: ${csi}.modules.necks.tconv_neck.TemporalConvNeck
+  in_channels: 768
+  out_channels: 1024
+  bottle_channels: 512
+  n_class: 1296
+  with_header: True,
+  pooling: max
+  dropout: 0.2
+decoder:
+  _target_: ${csi}.modules.decoders.transformer_decoder.TransformerDecoder
+  n_class: 1296
+  d_model: 1024
+  n_heads: 8
+  n_layers: 4
+  d_feedforward: 2048
+  dropout: 0.2

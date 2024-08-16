@@ -18,7 +18,7 @@ transforms:
   - _target_: ${CT}.common.TemporalAug
     t_min: 0.8
     t_max: 1.2
-    n_frame_max: 400
+    n_frame_max: 300
   - _target_: ${T}.Normalize
     mean: [123.675, 116.28, 103.53]
     std: [58.395, 57.12, 57.375]

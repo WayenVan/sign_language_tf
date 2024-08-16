@@ -18,39 +18,14 @@ from mmpretrain.models.utils import (SwiGLUFFNFused, build_norm_layer,
                      resize_pos_embed, to_2tuple)
 from mmpretrain.models.backbones.base_backbone import BaseBackbone
 from functools import partial
-
-class MaskGenerateModule(BaseModule):
-
-    def __init__(
-        self, 
-        embed_dims: int,
-        feats_size,
-        kernel_size: int = 3,
-        with_cls_token: bool = True,
-        init_cfg: dict | torch.List[dict] | None = None):
-        super().__init__(init_cfg)
-        self.h, self.w = tuple(feats_size)
-        self.with_cls_token = with_cls_token
-        self.conv = ConvModule(embed_dims, 2, kernel_size, padding=kernel_size//2, act_cfg=None, norm_cfg=None)
-    
-    def forward(self, x):
-        # x: B, N, C
-        if self.with_cls_token:
-            x = x[:, 1:]
-
-        x = rearrange(x, 'b (h w) c -> b c h w', h=self.h, w=self.w)
-        x = self.conv(x)
-        return x
+from xformers.components.attention.core import scaled_query_key_softmax, bmm, _apply_dropout, AttentionMask, _has_cpp_library
+from typing import Optional, Union
 
 # Efficient implementation equivalent to the following:
-def scaled_dot_product_attention_pyimpl(query, key, value, attn_mask=None, dropout_p=0.0, is_causal=False, scale=None) -> torch.Tensor:
+def scaled_dot_product_attention(query, key, value, attn_mask=None, dropout_p=0.0, is_causal=False, scale=None) -> torch.Tensor:
     L, S = query.size(-2), key.size(-2)
     scale_factor = 1 / math.sqrt(query.size(-1)) if scale is None else scale
     attn_bias = torch.zeros(L, S, dtype=query.dtype, device=query.device)
-
-    for i in range(len(query.size()[:-2])):
-        attn_bias = attn_bias.unsqueeze(0)
-
     if is_causal:
         assert attn_mask is None
         temp_mask = torch.ones(L, S, dtype=torch.bool).tril(diagonal=0)
@@ -65,13 +40,10 @@ def scaled_dot_product_attention_pyimpl(query, key, value, attn_mask=None, dropo
     attn_weight = query @ key.transpose(-2, -1) * scale_factor
     attn_weight += attn_bias
     attn_weight = torch.softmax(attn_weight, dim=-1)
+    attn_weight_out = attn_weight
     attn_weight = torch.dropout(attn_weight, dropout_p, train=True)
-    return attn_weight @ value
+    return attn_weight @ value, attn_weight_out
 
-if digit_version(torch.__version__) >= digit_version('2.0.0'):
-    scaled_dot_product_attention = F.scaled_dot_product_attention
-else:
-    scaled_dot_product_attention = scaled_dot_product_attention_pyimpl
 
 
 class MultiheadAttention(BaseModule):
@@ -132,7 +104,7 @@ class MultiheadAttention(BaseModule):
         self.head_dims = embed_dims // num_heads
         if qk_scale is not None:
             self.scaled_dot_product_attention = partial(
-                scaled_dot_product_attention_pyimpl,
+                scaled_dot_product_attention,
                 scale=self.head_dims**-0.5)
         else:
             self.scaled_dot_product_attention = scaled_dot_product_attention
@@ -163,9 +135,10 @@ class MultiheadAttention(BaseModule):
                                   self.head_dims).permute(2, 0, 3, 1, 4)
         q, k, v = qkv[0], qkv[1], qkv[2]
         
-        attn_mask = torch.unsqueeze(attn_mask, dim=-3) # add head dimension for broadcasting
+        if attn_mask is not None:
+            attn_mask = torch.unsqueeze(attn_mask, dim=-3) # add head dimension for broadcasting
         attn_drop = self.attn_drop if self.training else 0.
-        x = self.scaled_dot_product_attention(q, k, v, attn_mask=attn_mask, dropout_p=attn_drop)
+        x, attn_weight = self.scaled_dot_product_attention(q, k, v, attn_mask=attn_mask, dropout_p=attn_drop if self.training else 0.)
         x = x.transpose(1, 2).reshape(B, N, self.embed_dims)
 
         x = self.proj(x)
@@ -173,7 +146,7 @@ class MultiheadAttention(BaseModule):
 
         if self.v_shortcut:
             x = v.squeeze(1) + x
-        return x
+        return x, attn_weight
 
 
 
@@ -267,11 +240,11 @@ class TransformerEncoderLayer(BaseModule):
                 nn.init.normal_(m.bias, std=1e-6)
 
     def forward(self, x, attn_mask=None):
-        x = x + self.attn(self.ln1(x), attn_mask=attn_mask)
+        x1, attn_weight = self.attn(self.ln1(x), attn_mask=attn_mask)
+        x = x + x1
         x = self.ffn(self.ln2(x), identity=x)
-        return x
-
-
+        return x, attn_weight
+    
 class VisionTransformer(BaseBackbone):
     """Vision Transformer.
 
@@ -425,10 +398,6 @@ class VisionTransformer(BaseBackbone):
                  patch_cfg=dict(),
                  layer_cfgs=dict(),
                  pre_norm=False,
-                 heatmap_header_cfg=dict(
-                     index=[2, 4, 6, 8, 10],
-                     kernel_size=3,
-                 ),
                  init_cfg=None):
         super(VisionTransformer, self).__init__(init_cfg)
 
@@ -504,11 +473,8 @@ class VisionTransformer(BaseBackbone):
 
         # stochastic depth decay rule
         dpr = np.linspace(0, drop_path_rate, self.num_layers)
-        
-        #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>change from here>>>>>>>>>>>>>>>
-        self.heatmap_header_index = heatmap_header_cfg['index']
+
         self.layers = ModuleList()
-        self.heatmap_headers = nn.ModuleDict()
         if isinstance(layer_cfgs, dict):
             layer_cfgs = [layer_cfgs] * self.num_layers
         for i in range(self.num_layers):
@@ -524,13 +490,6 @@ class VisionTransformer(BaseBackbone):
                 norm_cfg=norm_cfg)
             _layer_cfg.update(layer_cfgs[i])
             self.layers.append(TransformerEncoderLayer(**_layer_cfg))
-
-            if i in heatmap_header_cfg['index']:
-                self.heatmap_headers[str(i)] = MaskGenerateModule(
-                    self.embed_dims, self.patch_resolution, kernel_size=heatmap_header_cfg['kernel_size'], with_cls_token=with_cls_token)
-        #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-                
-                
 
         self.frozen_stages = frozen_stages
         if pre_norm:
@@ -652,33 +611,22 @@ class VisionTransformer(BaseBackbone):
         x = self.pre_norm(x)
 
         outs = []
-        mask_logits_outs = []
-        #h w
-        maintained_mask = torch.ones(1, self.patch_resolution[0], self.patch_resolution[1], device=x.device, dtype=torch.int64)
+        attn_weights = []
         for i, layer in enumerate(self.layers):
-
-            #add cls_token mask
-            mask = rearrange(maintained_mask, 'n h w -> n () (h w)').bool()
+            x, attn_weight= layer(x)
+            #n heads (hw+1) (hw+1)
             if self.with_cls_token:
-                mask = F.pad(mask, (1, 0), value=True)
-
-            x = layer(x, attn_mask=mask)
+                attn_weight = attn_weight[:, :, :, 1:]
+            attn_weight = rearrange(attn_weight, 'b heads keys (h w) -> b heads keys h w', h=patch_resolution[0], w=patch_resolution[1])
+            attn_weights.append(attn_weight)
 
             if i == len(self.layers) - 1 and self.final_norm:
                 x = self.ln1(x)
 
             if i in self.out_indices:
                 outs.append(self._format_output(x, patch_resolution))
-            
-            #predict mask
-            if i in self.heatmap_header_index:
-                #n 2 h w
-                predicted_mask_logits = self.heatmap_headers[str(i)](x)
-                predicted_mask = F.gumbel_softmax(predicted_mask_logits, tau=1, hard=True)[:, 1].detach().int()
-                maintained_mask = maintained_mask * predicted_mask
-                mask_logits_outs.append(predicted_mask_logits)
 
-        return tuple(outs), tuple(mask_logits_outs)
+        return tuple(outs), tuple(attn_weights)
 
     def _format_output(self, x, hw):
         if self.out_type == 'raw':
@@ -728,6 +676,10 @@ class VisionTransformer(BaseBackbone):
             layer_depth = num_layers - 1
 
         return layer_depth, num_layers
+
+
+
+
     
     
 if __name__ == '__main__':
@@ -750,12 +702,8 @@ if __name__ == '__main__':
         patch_cfg=dict(),
         layer_cfgs=dict(),
         pre_norm=False,
-        heatmap_header_cfg=dict(
-            index=[2, 4, 6, 8, 10],
-            kernel_size=3,
-        ),
         init_cfg=None).to('cuda:1')
     model.eval()
     x = torch.randn(32, 3, 224, 224).to('cuda:1')
-    outs, mask_logits_outs = model(x)
+    outs, attn_weights = model(x)
     print('hello')

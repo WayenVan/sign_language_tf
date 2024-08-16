@@ -1,0 +1,8 @@
+_target_: ${csi}.modules.HeatmapLoss
+dw_pose_cfg: resources/dwpose-l/rtmpose-l_8xb64-270e_coco-ubody-wholebody-256x192.py
+dw_pose_ckpt: resources/dwpose-l/dw-ll_ucoco.pth
+dw_pose_input_size: [256, 192]
+input_size: [224, 224]
+weights: [1.0, 1.0]
+sigmas: [25, 20, 15, 10, 5]
+stage_lambda: [1.0, 1.0, 1.0, 1.0, 1.0]
