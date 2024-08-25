@@ -8,15 +8,17 @@ from ..dataset.phoenix14 import CollateFn
 
 
 class Ph14DataModule(LightningDataModule):
-    
-    def __init__(self,
-                 data_dir,
-                 batch_size,
-                 num_workers,
-                 train_shuffle,
-                 train_transform=None,
-                 val_transform=None,
-                 test_transform=None) -> None:
+    def __init__(
+        self,
+        data_dir,
+        batch_size,
+        num_workers,
+        train_shuffle,
+        train_transform=None,
+        val_transform=None,
+        test_transform=None,
+        excluded_ids=[],
+    ) -> None:
         super().__init__()
         self.data_root = data_dir
         self.batch_size = batch_size
@@ -28,25 +30,65 @@ class Ph14DataModule(LightningDataModule):
 
         self.train_shuffle = train_shuffle
 
-        self.train_set = MyPhoenix14Dataset(self.data_root, 'multisigner', 'train', transform=self.train_transform)
-        self.val_set = MyPhoenix14Dataset(self.data_root, 'multisigner', 'dev', transform=self.v_transform)
-        self.test_set = MyPhoenix14Dataset(self.data_root, 'multisigner', 'test', transform=self.test_transform)
+        self.train_set = MyPhoenix14Dataset(
+            self.data_root,
+            "multisigner",
+            "train",
+            transform=self.train_transform,
+            excluded_ids=excluded_ids,
+        )
+        self.val_set = MyPhoenix14Dataset(
+            self.data_root,
+            "multisigner",
+            "dev",
+            transform=self.v_transform,
+            excluded_ids=excluded_ids,
+        )
+        self.test_set = MyPhoenix14Dataset(
+            self.data_root,
+            "multisigner",
+            "test",
+            transform=self.test_transform,
+            excluded_ids=excluded_ids,
+        )
         self.collate_fn = CollateFn()
-    
+
     def get_vocab(self):
         return self.train_set.get_vocab()
-    
+
     def get_post_process(self):
         return PostProcess()
 
     def train_dataloader(self):
-        return DataLoader(self.train_set, batch_size=self.batch_size, shuffle=self.train_shuffle, collate_fn=CollateFn(), num_workers=self.num_workers, pin_memory=True)
-        
+        return DataLoader(
+            self.train_set,
+            batch_size=self.batch_size,
+            shuffle=self.train_shuffle,
+            collate_fn=CollateFn(),
+            num_workers=self.num_workers,
+            pin_memory=True,
+        )
+
     def val_dataloader(self) -> TRAIN_DATALOADERS:
-        return DataLoader(self.val_set, batch_size=self.batch_size, shuffle=False, collate_fn=CollateFn(), num_workers=self.num_workers, pin_memory=True)
-    
+        return DataLoader(
+            self.val_set,
+            batch_size=self.batch_size,
+            shuffle=False,
+            collate_fn=CollateFn(),
+            num_workers=self.num_workers,
+            pin_memory=True,
+        )
+
     def test_dataloader(self) -> TRAIN_DATALOADERS:
-        return DataLoader(self.test_set, batch_size=self.batch_size, shuffle=False, collate_fn=CollateFn(), num_workers=self.num_workers, pin_memory=True)
-    
+        return DataLoader(
+            self.test_set,
+            batch_size=self.batch_size,
+            shuffle=False,
+            collate_fn=CollateFn(),
+            num_workers=self.num_workers,
+            pin_memory=True,
+        )
+
     def predict_dataloader(self) -> TRAIN_DATALOADERS:
         return self.test_dataloader()
+

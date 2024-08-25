@@ -4,3 +4,4 @@ batch_size: 2
 train_transform: ${transforms.train}
 val_transform: ${transforms.test}
 test_transform: ${transforms.test}
+excluded_ids: ["13April_2011_Wednesday_tagesschau_default-14"]

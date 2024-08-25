@@ -4,6 +4,7 @@ dw_pose_ckpt: resources/dwpose-l/dw-ll_ucoco.pth
 dw_pose_input_size: [256, 192]
 input_size: [224, 224]
 weights: [1.0, 1.0]
-sigmas: [2, 1.5, 1.2, 1, 0.8]
+sigmas: [2, 1.5, 1.2, 1, 0.8] # used in producing the gaussion heatmap of hand and heads
 stages: [7, 8, 9, 10, 11]
 gamma: 2
+

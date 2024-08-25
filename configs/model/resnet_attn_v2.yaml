@@ -1,0 +1,30 @@
+_target_: ${csi}.modules.base_stream.BaseStream
+encoder:
+  _target_: ${csi}.modules.ResnetFocalEncoderV2
+  arch: resnet-18
+  ckpt: resources/resnet/resnet18_8xb32_in1k_20210831-fbbb1da6.pth
+  focal_module_cfg:
+    embed_dims: [128, 256, 512]
+    heads: [8, 8, 8]
+    stage_index: [1, 2, 3]
+    drop_resnet: 0.5
+    drop_hand: 0.5
+    dropout_face: 0.5
+neck:
+  _target_: ${csi}.modules.necks.tconv_neck.TemporalConvNeck
+  in_channels: 512
+  out_channels: 1024
+  bottle_channels: 512
+  n_class: 1296
+  with_header: True
+  pooling: max
+  dropout: 0.2
+decoder:
+  _target_: ${csi}.modules.decoders.transformer_decoder.TransformerDecoder
+  n_class: 1296
+  d_model: 1024
+  n_heads: 8
+  n_layers: 8
+  d_feedforward: 2048
+  dropout: 0.2
+

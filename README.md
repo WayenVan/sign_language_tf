@@ -1,3 +1,1 @@
 # Sign Language Recognition
-
-
