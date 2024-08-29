@@ -35,7 +35,9 @@ from torch.utils.tensorboard.writer import SummaryWriter
 
 
 @hydra.main(
-    version_base="1.3.2", config_path="../configs", config_name="run/train/heatmapresv2"
+    version_base="1.3.2",
+    config_path="../configs",
+    config_name="run/train/heatmapresv2_12l",
 )
 def main(cfg: DictConfig):
     seed_everything(cfg.seed, workers=True)
@@ -184,4 +186,3 @@ class DebugCallback(Callback):
 
 if __name__ == "__main__":
     main()
-

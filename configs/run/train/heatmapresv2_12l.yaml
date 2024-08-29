@@ -8,7 +8,7 @@ defaults:
   - /datamodule: ph14
   - /transforms/train: 224x224
   - /transforms/test: 224x224
-  - /model: resnet_attn_v2
+  - /model: resnet_attn_v2_12l
   - /loss: heatmapfocalresnet
 
 seed: 3407

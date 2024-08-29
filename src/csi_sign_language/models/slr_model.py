@@ -115,22 +115,23 @@ class SLRModel(L.LightningModule):
             raise e
 
         # if we should skip this batch
-        skip_flag = torch.tensor(0, dtype=torch.uint8, device=self.device)
-        if any(i in self.data_excluded for i in id):
-            skip_flag = torch.tensor(1, dtype=torch.uint8, device=self.device)
+        # skip_flag = torch.tensor(0, dtype=torch.uint8, device=self.device)
+        # if any(i in self.data_excluded for i in id):
+        #     skip_flag = torch.tensor(1, dtype=torch.uint8, device=self.device)
         if torch.isnan(loss) or torch.isinf(loss):
             self.print(
                 f"find nan, data id={id}, output length={outputs.t_length.cpu().numpy()}, label_length={gloss_length.cpu().numpy()}",
                 file=sys.stderr,
             )
-            skip_flag = torch.tensor(1, dtype=torch.uint8, device=self.device)
-        flags = self.all_gather(skip_flag)
-        if (flags > 0).any().item():
-            del outputs
-            del loss
-            self.print(flags)
-            self.print("skipped", file=sys.stderr)
-            return
+            raise ValueError("find nan in loss")
+            # skip_flag = torch.tensor(1, dtype=torch.uint8, device=self.device)
+        # flags = self.all_gather(skip_flag)
+        # if (flags > 0).any().item():
+        #     del outputs
+        #     del loss
+        #     self.print(flags)
+        #     self.print("skipped", file=sys.stderr)
+        #     return
 
         hyp = self._outputs2labels(outputs.out.detach(), outputs.t_length.detach())
 
