@@ -1,0 +1,9 @@
+{
+  "lspconfig": {
+    "pyright": {
+      "python.analysis.include": [
+        "src"
+      ]
+    }
+  }
+}

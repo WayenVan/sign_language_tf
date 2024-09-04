@@ -2,13 +2,25 @@ from torch import nn
 import torch
 from typing import Optional, Union, Tuple
 
-from xformers.components.attention.core import scaled_query_key_softmax, AttentionMask, \
-    _has_cpp_library, _is_blocksparse_available, _apply_dropout, bmm
+from xformers.components.attention.core import (
+    scaled_query_key_softmax,
+    AttentionMask,
+    _has_cpp_library,
+    _apply_dropout,
+    bmm,
+)
+
 if _has_cpp_library:
     from xformers.components.attention._sputnik_sparse import SparseCS
-from xformers.components.attention import ScaledDotProduct, Attention
-from xformers.components.multi_head_dispatch import InputProjection, _split_heads,\
-    _fold_heads, InputProjectionConfig, RotaryEmbedding, constant_
+from xformers.components.attention import Attention
+from xformers.components.multi_head_dispatch import (
+    InputProjection,
+    _split_heads,
+    _fold_heads,
+    InputProjectionConfig,
+    RotaryEmbedding,
+    constant_,
+)
 
 
 def scaled_dot_product_attention(
@@ -18,9 +30,10 @@ def scaled_dot_product_attention(
     att_mask: Optional[Union[AttentionMask, "SparseCS", torch.Tensor]],
     dropout: Optional[torch.nn.Module] = None,
 ) -> torch.Tensor:
-    
     if isinstance(att_mask, SparseCS) or (att_mask is not None and att_mask.is_sparse):
-        raise NotImplementedError("Sparse attention is not implemented for scaled dot product attention")
+        raise NotImplementedError(
+            "Sparse attention is not implemented for scaled dot product attention"
+        )
 
     att = scaled_query_key_softmax(q, k, att_mask=att_mask)
     #  Optional dropout, could be part of the masking in the future
@@ -31,6 +44,7 @@ def scaled_dot_product_attention(
     # y = att @ v  # (N, S, S) x (N, S, hs) -> (N, S, hs)
     y = bmm(att, v)
     return y, att
+
 
 class ScaledDotProduct(Attention):
     r"""
@@ -136,6 +150,7 @@ class ScaledDotProduct(Attention):
         )
         return y, attn_weight
 
+
 class MultiHeadDispatch(nn.Module):
     """
     A multi-head masked self-attention dispatch mechanism, with a projection at the end,
@@ -191,7 +206,9 @@ class MultiHeadDispatch(nn.Module):
             dim_model % num_heads == 0
         )  # static preset for now, each head works on 1/d the embeddings, could be relaxed
         assert num_heads > 0
-        assert isinstance(attention, ScaledDotProduct), 'Only my ScaledDotProduct is supported for this class'
+        assert isinstance(
+            attention, ScaledDotProduct
+        ), "Only my ScaledDotProduct is supported for this class"
 
         # Popular default is that all latent dimensions are the same
         dim_key, dim_value = map(lambda x: x if x else dim_model, (dim_key, dim_value))
@@ -268,9 +285,7 @@ class MultiHeadDispatch(nn.Module):
 
         # Catch different query and key length but a causal attention
         if S_Q != S_K:
-            assert (
-                not self.attention.requires_same_k_q_dimensions
-            ), "This attention mechanism requires query and key to have the same sequence (context) lengths"
+            assert not self.attention.requires_same_k_q_dimensions, "This attention mechanism requires query and key to have the same sequence (context) lengths"
 
             if hasattr(self.attention, "causal"):
                 assert not self.attention.causal, (
@@ -348,12 +363,12 @@ class MultiHeadDispatch(nn.Module):
 
         # Return the same sequence size as the input
         return y, attn_weight
-    
 
-if __name__ == '__main__':
-    attn = MultiHeadDispatch(512, 8, ScaledDotProduct()).to('cuda:1')
-    keys = torch.rand(2, 7, 512).to('cuda:1')
-    querys = torch.rand(2, 16, 512).to('cuda:1')
+
+if __name__ == "__main__":
+    attn = MultiHeadDispatch(512, 8, ScaledDotProduct()).to("cuda:1")
+    keys = torch.rand(2, 7, 512).to("cuda:1")
+    querys = torch.rand(2, 16, 512).to("cuda:1")
     output = attn(querys, keys, keys)
     print(output.shape)
-    
+

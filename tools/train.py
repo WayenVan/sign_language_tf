@@ -37,7 +37,7 @@ from torch.utils.tensorboard.writer import SummaryWriter
 @hydra.main(
     version_base="1.3.2",
     config_path="../configs",
-    config_name="run/train/heatmapresv2_12l",
+    config_name="run/train/heatmapresv2_efficient",
 )
 def main(cfg: DictConfig):
     seed_everything(cfg.seed, workers=True)
@@ -77,7 +77,7 @@ def main(cfg: DictConfig):
         accelerator="gpu",
         strategy="ddp_find_unused_parameters_true",
         # strategy='ddp',
-        devices=[0, 1],
+        devices=[1],
         callbacks=[ckpt_callback, lr_callback, debug_callback, rich_callback],
         logger=logger,
         log_every_n_steps=50,

@@ -48,5 +48,3 @@ if __name__ == '__main__':
     plot_mask(mask, 'resources/mask.pdf')
     print( mask.float().mean())
 
-            
-    

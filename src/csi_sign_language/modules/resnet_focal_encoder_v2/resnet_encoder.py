@@ -139,7 +139,11 @@ class ResnetFocalEncoderV2(nn.Module):
         )
 
         return self.ResnetFocalEncoderOut(
-            out=hand_token + x, t_length=t_length, attn_weights=attn_weight
+            # NOTE: see what happened when we remove GAP output from here, than added the
+            # out=hand_token + x, t_length=t_length, attn_weights=attn_weight
+            out=hand_token + x,
+            t_length=t_length,
+            attn_weights=attn_weight,
         )
 
     def pre_norm(self, x):
