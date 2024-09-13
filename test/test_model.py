@@ -38,7 +38,7 @@ class DebugCallback(Callback):
 
 def test_model():
     hydra.initialize_config_dir("/root/projects/sign_language_transformer/configs")
-    cfg = hydra.compose("run/train/heatmapresv2_efficient")
+    cfg = hydra.compose("run/train/resnet_distill_efficient")
     # cfg = hydra.compose('run/train/dual')
     index = 0
     print(socket.gethostname())

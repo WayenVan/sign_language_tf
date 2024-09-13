@@ -1,3 +1,4 @@
+**/.mypy_cache
 /experiments_post
 /dataset
 /results
@@ -22,3 +23,6 @@ mmpose
 *.log
 /tmp
 .neptune/
+**/build
+**/*.egg-info
+**/*.whl

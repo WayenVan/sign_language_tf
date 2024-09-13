@@ -8,7 +8,9 @@ from .efficient_decoder.efficient_attention import (
     # DiagonalMaskGenerator,
     BucketRandomAttention,
 )
+from .resnet_distill.resnet_dist_encoder import ResnetDistEncoder
 
 from .losses.heatmap_focal_resnet import HeatmapFocalResnetLoss
 from .losses.heatmap_focal_loss import HeatmapFocalLoss
 from .losses.heatmap_loss import HeatmapLoss
+from .losses.multitasks import MultiTaskDistillLoss

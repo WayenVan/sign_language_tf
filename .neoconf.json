@@ -1,9 +1,11 @@
 {
   "lspconfig": {
-    "pyright": {
-      "python.analysis.include": [
-        "src"
-      ]
+    "basedpyright": {
+      "basedpyright.analysis.include": [
+        "src",
+        "experiments"
+      ],
+      "basedpyright.analysis.typeCheckingMode": "basic"
     }
   }
 }

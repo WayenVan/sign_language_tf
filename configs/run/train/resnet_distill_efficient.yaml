@@ -1,0 +1,37 @@
+#@package _global_
+defaults:
+  - /prefix@_global_
+  - /resources@_global_
+  - /hydra: no_output
+  - /optimizer: adam
+  - /lr_scheduler: step
+  - /datamodule: ph14
+  - /transforms/train: 224x224
+  - /transforms/test: 224x224
+  - /model: resnet_distill_efficient_decoder
+  - /loss: multitask_distill
+
+seed: 3407
+epoch: 200
+tags:
+  - multitask_distill
+  - dwpose
+  - resnet
+  - sparse_attention
+
+#if continuos read model
+load_weights: False
+is_resume: False
+checkpoint: outputs/train_lightning/2024-04-24_01-42-41/last.ckpt
+
+datamodule:
+  batch_size: 1
+  num_workers: 4
+  train_shuffle: False
+
+optimizer:
+  lr: 1e-4
+
+lr_scheduler:
+  step_size: 40
+  gamma: 0.1

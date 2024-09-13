@@ -1,0 +1,7 @@
+_target_: ${csi}.modules.MultiTaskDistillLoss
+dw_pose_cfg: resources/dwpose-l/rtmpose-l_8xb64-270e_coco-ubody-wholebody-256x192.py
+dw_pose_ckpt: resources/dwpose-l/dw-ll_ucoco.pth
+dw_pose_input_size: [256, 192]
+ctc_weight: 1.0
+distill_weight: 1.0
+temperature: 8.0
