@@ -38,7 +38,7 @@ class DebugCallback(Callback):
 
 def test_model():
     hydra.initialize_config_dir("/root/projects/sign_language_transformer/configs")
-    cfg = hydra.compose("run/train/resnet_distill_efficient")
+    cfg = hydra.compose("run/train/resnet_distill_v2_efficient")
     # cfg = hydra.compose('run/train/dual')
     index = 0
     print(socket.gethostname())
@@ -55,7 +55,7 @@ def test_model():
         strategy="ddp_find_unused_parameters_true",
         # strategy='deepspeed_stage_2',
         # max_steps=100,
-        devices=[1],
+        devices=getattr(cfg, "devices", [1]),
         logger=False,
         enable_checkpointing=False,
         precision=16,

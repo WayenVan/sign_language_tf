@@ -1,0 +1,9 @@
+_target_: ${csi}.modules.MultiTaskDistillLossV2
+dwpose_cfg: /root/projects/sign_language_transformer/resources/dwpose-l/rtmpose-l_8xb64-270e_coco-ubody-wholebody-256x192.py
+dwpose_ckpt: /root/projects/sign_language_transformer/resources/dwpose-l/dw-ll_ucoco.pth
+vitpose_cfg: resources/ViTPose/td-hm_ViTPose-small_8xb64-210e_coco-256x192.py
+vitpose_ckpt: resources/ViTPose/td-hm_ViTPose-small_8xb64-210e_coco-256x192-62d7a712_20230314.pth
+ctc_weight: 1.0
+dwpose_weight: 1.0
+vitpose_weight: 1.0
+dwpose_dist_temperature: 8.0

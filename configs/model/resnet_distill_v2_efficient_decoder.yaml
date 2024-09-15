@@ -1,0 +1,23 @@
+_target_: ${csi}.modules.base_stream.BaseStream
+encoder:
+  _target_: ${csi}.modules.ResnetDistEncoderV2
+  ckpt: resources/resnet/resnet18_8xb32_in1k_20210831-fbbb1da6.pth
+  cfg: /root/resources/resnet/resnet18.py
+  input_size: [224, 224]
+  n_keypoints_simcc: 133
+  n_keypoints_heatmap: 17
+  simcc_x_samples: 384
+  simcc_y_samples: 512
+  drop_prob: 0.5
+decoder:
+  _target_: ${csi}.modules.EfficientDecoder
+  input_dims: 512
+  d_model: 1024
+  n_layers: 8
+  n_head: 8
+  n_classes: 1296
+  bucket_size: 4
+  conv_kernel_head: 5
+  conv_kernel_block: 3
+  ff_dropout: 0.0
+  drop_path: 0.0

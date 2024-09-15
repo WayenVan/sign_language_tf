@@ -2,41 +2,13 @@ import torch
 from torch import nn
 from torch import Tensor
 from torchvision.transforms import functional as F
-from mmpose.apis.inference import init_model, init_default_scope
-from matplotlib import pyplot as plt
+from mmpose.apis.inference import init_model
 from mmengine import Config
-from mmpose.models.heads import RTMCCHead, SimCCHead
-from mmpose.models import TopdownPoseEstimator
-from mmpose.apis import Pose2DInferencer, inference_topdown
-from mmdet.models.backbones import CSPNeXt
-from mmpose.codecs.simcc_label import SimCCLabel
-from mmpose.models.losses import KLDiscretLoss
-from PIL import Image
-import numpy as np
-from einops import rearrange, einsum
 
-
-def central_crop(image, crop_width, crop_height):
-    # Get the dimensions of the image
-    img_width, img_height = image.size
-
-    # Calculate the coordinates for the central crop
-    left = (img_width - crop_width) / 2
-    top = (img_height - crop_height) / 2
-    right = (img_width + crop_width) / 2
-    bottom = (img_height + crop_height) / 2
-
-    # Perform the crop
-    cropped_image = image.crop((left, top, right, bottom))
-    return cropped_image
-
-
-def decode(x, y, simcc_split_ratio):
-    x_locs = x.argmax(dim=-1)
-    y_locs = y.argmax(dim=-1)
-    locs = torch.stack([x_locs, y_locs], dim=-1).to(x.dtype)
-    locs /= simcc_split_ratio
-    return locs
+if __name__ == "__main__":
+    from PIL import Image
+    import numpy as np
+    from matplotlib import pyplot as plt
 
 
 class DWPoseWarpper(nn.Module):
@@ -53,6 +25,8 @@ class DWPoseWarpper(nn.Module):
         self.input_H = _cfg.codec.input_size[1]
         self.input_W = _cfg.codec.input_size[0]
         self.simcc_split_ratio = _cfg.codec.simcc_split_ratio
+        self.output_H = self.input_H * self.simcc_split_ratio
+        self.output_W = self.input_W * self.simcc_split_ratio
         self.freeze()
 
     @torch.no_grad()
@@ -90,6 +64,28 @@ class DWPoseWarpper(nn.Module):
 
 
 if __name__ == "__main__":
+
+    def central_crop(image, crop_width, crop_height):
+        # Get the dimensions of the image
+        img_width, img_height = image.size
+
+        # Calculate the coordinates for the central crop
+        left = (img_width - crop_width) / 2
+        top = (img_height - crop_height) / 2
+        right = (img_width + crop_width) / 2
+        bottom = (img_height + crop_height) / 2
+
+        # Perform the crop
+        cropped_image = image.crop((left, top, right, bottom))
+        return cropped_image
+
+    def decode(x, y, simcc_split_ratio):
+        x_locs = x.argmax(dim=-1)
+        y_locs = y.argmax(dim=-1)
+        locs = torch.stack([x_locs, y_locs], dim=-1).to(x.dtype)
+        locs /= simcc_split_ratio
+        return locs
+
     model = DWPoseWarpper(
         cfg="resources/dwpose-l/rtmpose-l_8xb64-270e_coco-ubody-wholebody-256x192.py",
         ckpt="resources/dwpose-l/dw-ll_ucoco.pth",
@@ -106,14 +102,6 @@ if __name__ == "__main__":
 
     # run model
     x, y = model(image)
-    # x, y = (torch.nn.functional.softmax(a, dim=-1) ** 4 for a in (x, y))
-    # p = einsum(x, y, "b k i, b k j -> b k j i")
-    # p = p.max(dim=-3)[0]
-    # plt.imshow(p[0, 37].cpu().numpy())
-    # plt.savefig("outputs/pose.png")
-    #
-    # locs = decode(x, y, model.simcc_split_ratio)
-    # print(locs.shape)
 
     image_np = image.squeeze(0).permute(1, 2, 0).cpu().numpy()
     image_np = (image_np * 255).astype(np.uint8)
