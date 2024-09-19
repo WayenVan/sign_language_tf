@@ -91,4 +91,3 @@ class Ph14DataModule(LightningDataModule):
 
     def predict_dataloader(self) -> TRAIN_DATALOADERS:
         return self.test_dataloader()
-

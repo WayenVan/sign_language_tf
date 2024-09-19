@@ -1,8 +1,12 @@
 import abc
 from typing import List, Tuple
 
+BatchResult = List[List[str]]
+
+
 class IPostProcess(abc.ABC):
-    
-    abc.abstractmethod
-    def process(self, hyp: List[List[str]], gt: List[List[str]]) -> Tuple[any, any]:
+    @abc.abstractmethod
+    def process(
+        self, hyp: BatchResult, gt: BatchResult
+    ) -> Tuple[BatchResult, BatchResult]:
         pass
